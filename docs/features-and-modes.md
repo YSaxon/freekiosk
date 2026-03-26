@@ -1,6 +1,21 @@
-# Features and Modes
+<div align="center">
 
-## Core Features
+# 🧭 Features and Modes
+
+_A quick map of how FreeKiosk can run, lock, and present content on Android tablets._
+
+<p>
+  <a href="README.md">Docs Home</a> •
+  <a href="installation.md">Installation</a> •
+  <a href="INTEGRATIONS.md">Integrations</a>
+</p>
+
+</div>
+
+> [!TIP]
+> Use this page to choose your operational mode first, then jump to setup and automation guides.
+
+## 🎛️ Core Features
 
 - Kiosk browser mode (WebView)
 - External App mode (lock one Android app)
@@ -8,7 +23,7 @@
 - PIN/password-protected settings access
 - Optional screen pinning and lock task policies
 
-## Display Modes
+## 🖥️ Display Modes
 
 ### WebView Mode
 
@@ -32,13 +47,13 @@
 
 Recent versions include media-player and multi-app deployment improvements. See release notes in [Roadmap and Changelog](roadmap-and-changelog.md).
 
-## Security and Control
+## 🔐 Security and Control
 
 - Device Owner full lockdown
 - Home/recent/settings access restrictions
 - Optional blocking overlays and kiosk watchdog behavior
 
-## Provisioning and Operations
+## ⚙️ Provisioning and Operations
 
 - ADB headless provisioning for mass rollout
 - Backup/restore configurations

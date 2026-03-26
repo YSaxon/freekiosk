@@ -1,25 +1,44 @@
-# FreeKiosk Documentation
+<div align="center">
 
-Wiki for setup, operations, integrations, and development.
+# 📚 FreeKiosk Documentation Hub
 
-## Core Guides
+_Operational guides, integrations and technical reference for production kiosk deployments._
 
-- [Installation](installation.md)
-- [Features and Modes](features-and-modes.md)
-- [Integrations](integrations.md)
-- [Roadmap and Changelog](roadmap-and-changelog.md)
-- [Development](development.md)
-- [FAQ](faq.md)
+<p>
+  <a href="../README.md">Main README</a> •
+  <a href="installation.md">Install</a> •
+  <a href="rest-api.md">REST API</a> •
+  <a href="MQTT.md">MQTT</a>
+</p>
 
-## Technical Reference
+</div>
 
-- [ADB Configuration](adb-configuration.md)
-- [REST API](rest-api.md)
-- [MQTT](mqtt.md)
-- [Pipeline and Wiki Sync](pipeline-and-wiki-sync.md)
+> [!NOTE]
+> This folder is the source of truth for GitHub Wiki publishing.
 
-## Project Links
+## 🧭 Start Here
+
+| Guide | Best For | Link |
+|---|---|---|
+| Installation | First setup on a tablet | [Open](installation.md) |
+| Features and Modes | Choosing kiosk/display mode | [Open](features-and-modes.md) |
+| Integrations | Home Assistant / automation overview | [Open](INTEGRATIONS.md) |
+| FAQ | Quick answers and troubleshooting | [Open](faq.md) |
+
+## 🛠 Technical Reference
+
+| Reference | Scope | Link |
+|---|---|---|
+| ADB Configuration | Headless provisioning and scripts | [Open](adb-configuration.md) |
+| REST API | Endpoints and payloads | [Open](rest-api.md) |
+| MQTT | Topics, discovery, commands | [Open](MQTT.md) |
+| Roadmap and Changelog | Release highlights and direction | [Open](roadmap-and-changelog.md) |
+| Development | Local setup and build flow | [Open](development.md) |
+| Pipeline and Wiki Sync | Docs publication workflow | [Open](pipeline-and-wiki-sync.md) |
+
+## 🌐 Project Links
 
 - Website: [freekiosk.app](https://freekiosk.app)
 - Releases: [GitHub Releases](https://github.com/rushb-fr/freekiosk/releases)
 - Issues: [GitHub Issues](https://github.com/rushb-fr/freekiosk/issues)
+- Discussions: [GitHub Discussions](https://github.com/rushb-fr/freekiosk/discussions)

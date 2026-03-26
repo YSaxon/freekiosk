@@ -1,12 +1,24 @@
-# Pipeline and Wiki Sync
+<div align="center">
 
-This page explains how FreeKiosk publishes repository documentation to the GitHub Wiki.
+# 🔄 Pipeline and Wiki Sync
+
+_How FreeKiosk publishes repository docs to GitHub Wiki automatically._
+
+<p>
+  <a href="README.md">Docs Home</a> •
+  <a href="../.github/workflows/wiki-sync.yml">Workflow File</a>
+</p>
+
+</div>
+
+> [!NOTE]
+> Sync direction is one-way: repository `docs/` is the source of truth.
 
 ## Source of Truth
 
 - Repository documentation source: `docs/`
 - Wiki publication target: `${repo}.wiki.git`
-- Workflow file: `.github/workflows/docs-to-wiki-sync.yml`
+- Workflow file: `.github/workflows/wiki-sync.yml`
 
 ## How It Works
 

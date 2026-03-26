@@ -1,6 +1,19 @@
-# FreeKiosk Installation Guide
+<div align="center">
 
-Complete guide to install and configure FreeKiosk on your Android tablet.
+# 🚀 FreeKiosk Installation Guide
+
+_Complete path from first install to full Device Owner lockdown._
+
+<p>
+  <a href="README.md">Docs Home</a> •
+  <a href="features-and-modes.md">Modes</a> •
+  <a href="adb-configuration.md">ADB Configuration</a>
+</p>
+
+</div>
+
+> [!TIP]
+> If you are deploying public-facing tablets, skip directly to Device Owner mode.
 
 ---
 

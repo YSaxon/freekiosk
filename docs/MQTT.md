@@ -1,4 +1,16 @@
-# FreeKiosk MQTT Documentation
+<div align="center">
+
+# 📡 FreeKiosk MQTT Documentation
+
+_Real-time telemetry, command topics, and Home Assistant auto-discovery._
+
+<p>
+  <a href="README.md">Docs Home</a> •
+  <a href="INTEGRATIONS.md">Integrations</a> •
+  <a href="rest-api.md">REST API</a>
+</p>
+
+</div>
 
 FreeKiosk includes a native MQTT client for real-time integration with **Home Assistant** and other MQTT-based platforms.
 
@@ -10,6 +22,7 @@ FreeKiosk includes a native MQTT client for real-time integration with **Home As
 - **Push-based**: Real-time status updates (no polling needed)
 - **LWT**: Availability tracking via Last Will and Testament
 
+> [!TIP]
 > **MQTT vs REST API**: MQTT is push-based — the tablet publishes status updates automatically every N seconds. The REST API requires polling. MQTT is the preferred integration for Home Assistant. Both can run simultaneously.
 
 ## Enabling MQTT

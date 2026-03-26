@@ -1,4 +1,16 @@
-# FreeKiosk REST API Documentation
+<div align="center">
+
+# 🌐 FreeKiosk REST API Documentation
+
+_Control, monitor, and automate kiosks over HTTP with JSON responses._
+
+<p>
+  <a href="README.md">Docs Home</a> •
+  <a href="INTEGRATIONS.md">Integrations</a> •
+  <a href="MQTT.md">MQTT</a>
+</p>
+
+</div>
 
 FreeKiosk includes a built-in REST API server for integration with **Home Assistant** and other smart home platforms.
 
@@ -9,7 +21,8 @@ FreeKiosk includes a built-in REST API server for integration with **Home Assist
 - **Authentication**: Optional API Key (X-Api-Key header)
 - **Format**: JSON responses
 
-> 💡 **Note**: Some API features require **Device Owner mode** for full functionality (true screen off, reboot). The HTTP server remains accessible even when the screen is off (v1.2.4+). See [Installation Guide](installation.md#advanced-install-device-owner-mode) for Device Owner setup instructions.
+> [!NOTE]
+> Some API features require **Device Owner mode** for full functionality (true screen off, reboot). The HTTP server remains accessible even when the screen is off (v1.2.4+). See [Installation Guide](installation.md#advanced-install-device-owner-mode) for Device Owner setup instructions.
 
 ## Enabling the API
 

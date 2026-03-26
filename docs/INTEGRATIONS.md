@@ -1,6 +1,21 @@
-# Integrations
+<div align="center">
 
-## Home Assistant and Automation
+# 🔌 Integrations
+
+_Connect FreeKiosk to your automation stack with REST and MQTT, or both together._
+
+<p>
+  <a href="README.md">Docs Home</a> •
+  <a href="rest-api.md">REST API</a> •
+  <a href="MQTT.md">MQTT</a>
+</p>
+
+</div>
+
+> [!IMPORTANT]
+> REST and MQTT can run simultaneously on the same device.
+
+## 🤖 Home Assistant and Automation
 
 FreeKiosk supports two main integration channels:
 
@@ -8,6 +23,11 @@ FreeKiosk supports two main integration channels:
 - MQTT for push-based telemetry and commands
 
 Both can run simultaneously.
+
+| Channel | Best when | Reference |
+|---|---|---|
+| REST API | You want request/response control on demand | [REST API Documentation](rest-api.md) |
+| MQTT | You want push telemetry + Home Assistant discovery | [MQTT Documentation](MQTT.md) |
 
 ## REST API
 
@@ -34,7 +54,7 @@ Highlights:
 
 Reference:
 
-- [MQTT Documentation](mqtt.md)
+- [MQTT Documentation](MQTT.md)
 
 ## Headless Setup
 

@@ -1,4 +1,19 @@
-# FreeKiosk - Frequently Asked Questions
+<div align="center">
+
+# ❓ FreeKiosk FAQ
+
+_Common questions about setup, lockdown, compatibility, and operations._
+
+<p>
+  <a href="README.md">Docs Home</a> •
+  <a href="installation.md">Installation</a> •
+  <a href="features-and-modes.md">Features</a>
+</p>
+
+</div>
+
+> [!TIP]
+> Start from `installation.md` for first deployment, then use this page for edge cases.
 
 ---
 

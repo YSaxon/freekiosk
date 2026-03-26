@@ -1,4 +1,19 @@
-# Development
+<div align="center">
+
+# 🧪 Development
+
+_Build, run, and ship FreeKiosk locally._
+
+<p>
+  <a href="README.md">Docs Home</a> •
+  <a href="installation.md">Installation</a> •
+  <a href="roadmap-and-changelog.md">Roadmap</a>
+</p>
+
+</div>
+
+> [!NOTE]
+> This page focuses on contributor setup. Operational deployment is documented in `installation.md`.
 
 ## Prerequisites
 
@@ -42,4 +57,4 @@ Output APK:
 - [Install Guide](installation.md)
 - [ADB Configuration](adb-configuration.md)
 - [REST API](rest-api.md)
-- [MQTT](mqtt.md)
+- [MQTT](MQTT.md)

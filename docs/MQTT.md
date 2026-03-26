@@ -10,6 +10,16 @@
   <a href="rest-api.md">🌐 REST API</a>
 </p>
 
+## 📋 Table of Contents
+
+- [📖 Overview](#-overview)
+- [🔧 Configuration](#-configuration)
+- [🚀 Getting Started](#-getting-started)
+- [📋 Features](#-features)
+- [🚨 Troubleshooting](#-troubleshooting)
+- [🔗 Related Resources](#-related-resources)
+
+
 
 
 FreeKiosk includes a native MQTT client for real-time integration with **Home Assistant** and other MQTT-based platforms.

@@ -10,6 +10,16 @@
   <a href="adb-configuration.md">⌨️ ADB Configuration</a>
 </p>
 
+## 📋 Table of Contents
+
+- [📖 Overview](#-overview)
+- [🔧 Configuration](#-configuration)
+- [🚀 Getting Started](#-getting-started)
+- [📋 Features](#-features)
+- [🚨 Troubleshooting](#-troubleshooting)
+- [🔗 Related Resources](#-related-resources)
+
+
 
 
 > [!TIP]

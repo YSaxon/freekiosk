@@ -10,6 +10,16 @@
   <a href="development.md">👨‍💻 Development</a>
 </p>
 
+## 📋 Table of Contents
+
+- [📖 Overview](#-overview)
+- [🔧 Configuration](#-configuration)
+- [🚀 Getting Started](#-getting-started)
+- [📋 Features](#-features)
+- [🚨 Troubleshooting](#-troubleshooting)
+- [🔗 Related Resources](#-related-resources)
+
+
 
 
 > [!IMPORTANT]

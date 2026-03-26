@@ -11,6 +11,19 @@
   <a href="MQTT.md">📡 MQTT</a>
 </p>
 
+## 📋 Table of Contents
+
+- [🎯 Overview](#-overview)
+- [🔐 Security Model](#-security-model)
+- [🚀 Quick Start](#-quick-start)
+- [⚙️ Configuration Parameters](#️-configuration-parameters)
+- [📱 Device States](#-device-states)
+- [🔧 Common Commands](#-common-commands)
+- [📋 Command Reference](#-command-reference)
+- [🔄 Advanced Scenarios](#-advanced-scenarios)
+- [🚨 Troubleshooting](#-troubleshooting)
+- [🔗 Related Resources](#-related-resources)
+
 
 
 > [!IMPORTANT]

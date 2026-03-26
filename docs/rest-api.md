@@ -10,6 +10,16 @@
   <a href="MQTT.md">📡 MQTT</a>
 </p>
 
+## 📋 Table of Contents
+
+- [📖 Overview](#-overview)
+- [🔧 Configuration](#-configuration)
+- [🚀 Getting Started](#-getting-started)
+- [📋 Features](#-features)
+- [🚨 Troubleshooting](#-troubleshooting)
+- [🔗 Related Resources](#-related-resources)
+
+
 
 
 FreeKiosk includes a built-in REST API server for integration with **Home Assistant** and other smart home platforms.

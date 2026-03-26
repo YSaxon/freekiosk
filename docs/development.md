@@ -10,6 +10,20 @@
   <a href="roadmap-and-changelog.md">🗺️ Roadmap</a>
 </p>
 
+## 📋 Table of Contents
+
+- [📋 Prerequisites](#-prerequisites)
+- [🔧 Additional Requirements](#-additional-requirements)
+- [🚀 Local Setup](#-local-setup)
+- [📱 Run on Android](#-run-on-android)
+- [🔍 Common Issues](#-common-issues)
+- [📦 Build Release APK](#-build-release-apk)
+- [📂 Output Locations](#-output-locations)
+- [🤝 Contributing](#-contributing)
+- [🎯 How to Contribute](#-how-to-contribute)
+- [🔗 Related Technical Docs](#-related-technical-docs)
+- [🏗️ Project Structure](#️-project-structure)
+
 
 
 > [!NOTE]

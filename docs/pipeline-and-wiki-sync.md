@@ -9,6 +9,18 @@
   <a href="../.github/workflows/wiki-sync.yml">📄 Workflow File</a>
 </p>
 
+## 📋 Table of Contents
+
+- [📂 Source of Truth](#-source-of-truth)
+- [⚙️ How It Works](#️-how-it-works)
+- [📋 Operational Notes](#-operational-notes)
+- [🔄 Sync Direction](#-sync-direction)
+- [📝 Best Practices](#-best-practices)
+- [🚨 Recovery Checklist](#-recovery-checklist)
+- [🔧 Common Issues and Solutions](#-common-issues-and-solutions)
+- [🔧 Technical Details](#-technical-details)
+- [🔗 Related Resources](#-related-resources)
+
 
 
 > [!NOTE]

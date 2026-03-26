@@ -1,53 +1,53 @@
 
 
-# ⌨️ FreeKiosk ADB Configuration Guide
+# FreeKiosk ADB Configuration Guide
 
 **Headless provisioning and scripted deployments with secure PIN-based control**
 
 <p>
-  <a href="README.md">📚 Docs Home</a> •
-  <a href="installation.md">🔧 Installation</a> •
-  <a href="rest-api.md">🌐 REST API</a> •
-  <a href="MQTT.md">📡 MQTT</a>
+  <a href="README.md">Docs Home</a> •
+  <a href="installation.md">Installation</a> •
+  <a href="rest-api.md">REST API</a> •
+  <a href="MQTT.md">MQTT</a>
 </p>
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [🎯 Overview](#overview)
-- [🔐 Security Model](#security-model)
-- [🚀 Quick Start](#quick-start)
-- [⚙️ Configuration Parameters](#️-configuration-parameters)
-- [📱 Device States](#device-states)
-- [🔧 Common Commands](#common-commands)
-- [📋 Command Reference](#command-reference)
-- [🔄 Advanced Scenarios](#advanced-scenarios)
-- [🚨 Troubleshooting](#troubleshooting)
-- [🔗 Related Resources](#related-resources)
+- [Overview](#overview)
+- [Security Model](#security-model)
+- [Quick Start](#quick-start)
+- [Configuration Parameters](#configuration-parameters)
+- [Device States](#device-states)
+- [Common Commands](#common-commands)
+- [Command Reference](#command-reference)
+- [Advanced Scenarios](#advanced-scenarios)
+- [Troubleshooting](#troubleshooting)
+- [Related Resources](#related-resources)
 
 
 
 > [!IMPORTANT]
 > For production-grade app locking, pair ADB provisioning with **Device Owner mode**.
 
-## 🎯 Overview
+## Overview
 
 FreeKiosk supports configuration via Android Debug Bridge (ADB) intent extras, enabling:
 
-| ✅ Capability | 📋 Description |
+| Capability | Description |
 |---|---|
-| **🤖 Automated Device Provisioning** | Configure without UI interaction |
-| **📦 Mass Deployment** | Scale across multiple devices |
-| **⚡ Dynamic Configuration** | Change settings via scripts |
-| **🔄 CI/CD Integration** | Automated testing workflows |
+| **Automated Device Provisioning** | Configure without UI interaction |
+| **Mass Deployment** | Scale across multiple devices |
+| **Dynamic Configuration** | Change settings via scripts |
+| **CI/CD Integration** | Automated testing workflows |
 
-## 🔐 Security Model
+## Security Model
 
 
 
-| Device State | 📋 Requirements |
+| Device State | Requirements |
 |--------------|-------------|
-| **🔓 Virgin setup** (no PIN configured) | PIN **must be provided** in the command |
-| **🔒 Already configured** | Existing PIN **required** to modify |
+| **Virgin setup** (no PIN configured) | PIN **must be provided** in the command |
+| **Already configured** | Existing PIN **required** to modify |
 
 
 
@@ -62,9 +62,9 @@ This security model ensures:
 
 
 
-## 🚀 Quick Start
+## Quick Start
 
-### 📱 First-Time Setup (New Device)
+### First-Time Setup (New Device)
 
 
 
@@ -83,7 +83,7 @@ adb shell am start -n com.freekiosk/.MainActivity \
 > [!NOTE]
 > Setting Device Owner is **highly recommended** for external app locking as it allows FreeKiosk to automatically manage all required permissions including "Display over other apps". Without Device Owner, this permission must be granted manually through Settings.
 
-### 🌐 Configure WebView Kiosk
+### Configure WebView Kiosk
 
 
 
@@ -99,9 +99,9 @@ adb shell am start -n com.freekiosk/.MainActivity \
 > WebView mode doesn't require Device Owner as it doesn't need overlay permissions.
 
 
-## 📖 Command Reference
+## Command Reference
 
-### 🔧 Basic Syntax
+### Basic Syntax
 
 
 
@@ -111,28 +111,28 @@ adb shell am start -n com.freekiosk/.MainActivity [OPTIONS]
 
 
 
-### 🔑 Required Parameters
+### Required Parameters
 
-| Parameter | Type | 📋 Description |
+| Parameter | Type | Description |
 |-----------|------|-------------|
 | `--es pin "XXXX"` | String | **Always required**. PIN for authentication (new or existing) |
 
-### 📱 App Lock Parameters
+### App Lock Parameters
 
-| Parameter | Type | 📋 Description |
+| Parameter | Type | Description |
 |-----------|------|-------------|
 | `--es lock_package "com.app"` | String | Package name of app to lock device to |
 | `--ez auto_start true` | Boolean | Auto-launch the locked app after config |
 
-### 🌐 WebView Parameters
+### WebView Parameters
 
-| Parameter | Type | 📋 Description |
+| Parameter | Type | Description |
 |-----------|------|-------------|
 | `--es url "https://..."` | String | URL to display in kiosk WebView |
 
-### ⚙️ Kiosk Mode Options
+### Kiosk Mode Options
 
-| Parameter | Type | Default | 📋 Description |
+| Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `--ez kiosk_enabled true` | Boolean | `true` | Enable/disable kiosk mode |
 | `--ez auto_start true` | Boolean | - | Auto-launch the locked app after config |
@@ -142,23 +142,23 @@ adb shell am start -n com.freekiosk/.MainActivity [OPTIONS]
 | `--es back_button_mode "immediate"` | String | `"test"` | Behavior when returning to FreeKiosk via Android back button: `"test"` (stay on FreeKiosk, back button allowed), `"timer"` (countdown then relaunch app), `"immediate"` (instantly relaunch app). If `test_mode` is also set, `back_button_mode` takes priority |
 | `--es status_bar "true"` | String | - | Show custom status bar |
 
-### 🔐 Password Options
+### Password Options
 
-| Parameter | Type | Default | 📋 Description |
+| Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `--es pin_mode "numeric"` | String | `numeric` | PIN input mode: `numeric` (4-6 digits) or `alphanumeric` (letters, numbers, special chars) |
 
-### 🌐 REST API Options
+### REST API Options
 
-| Parameter | Type | 📋 Description |
+| Parameter | Type | Description |
 |-----------|------|-------------|
 | `--es rest_api_enabled "true"` | String | Enable REST API server |
 | `--es rest_api_port "8080"` | String | API server port |
 | `--es rest_api_key "secret"` | String | API authentication key |
 
-### 📡 MQTT Options
+### MQTT Options
 
-| Parameter | Type | 📋 Description |
+| Parameter | Type | Description |
 |-----------|------|-------------|
 | `--es mqtt_enabled "true"` | String | Enable MQTT client |
 | `--es mqtt_broker_url "host"` | String | MQTT broker hostname or IP |
@@ -172,18 +172,18 @@ adb shell am start -n com.freekiosk/.MainActivity [OPTIONS]
 | `--es mqtt_allow_control "true"` | String | Allow remote control via MQTT |
 | `--es mqtt_device_name "name"` | String | Friendly device name for HA discovery |
 
-### 🖥️ Screensaver Options
+### Screensaver Options
 
-| Parameter | Type | 📋 Description |
+| Parameter | Type | Description |
 |-----------|------|-------------|
 | `--es screensaver_enabled "true"` | String | Enable screensaver on inactivity |
 
 
-## ⏳ Waiting for Configuration Completion
+## Waiting for Configuration Completion
 
 The ADB command returns immediately, but FreeKiosk needs time to save settings and restart. **Use broadcast receivers to wait for completion**:
 
-### 🟨 TypeScript/JavaScript Example
+### TypeScript/JavaScript Example
 
 
 
@@ -216,7 +216,7 @@ private async setupKioskModeUsingFreeKiosk(packageName: string): Promise<void> {
 
 
 
-### 🔧 Bash Script Example
+### Bash Script Example
 
 
 
@@ -244,21 +244,21 @@ echo "Configuration complete!"
 
 
 
-### 📡 Broadcast Events
+### Broadcast Events
 
 FreeKiosk emits these broadcasts during ADB configuration:
 
-| Broadcast Action | ⏰ When | 📋 Description |
+| Broadcast Action | When | Description |
 |-----------------|------|-------------|
 | `com.freekiosk.ADB_CONFIG_SAVED` | Immediately after config saved | Database write complete, restart imminent |
 | `com.freekiosk.ADB_CONFIG_RESTARTING` | Just before restart | Process kill in 500ms |
 | `com.freekiosk.SETTINGS_LOADED` | After restart complete | App restarted and settings loaded successfully |
 | `com.freekiosk.EXTERNAL_APP_LAUNCHED` | After external app launch (auto_start=true) | External app is launched and visible (includes package_name extra) |
 
-**📱 For WebView mode**: Wait for `SETTINGS_LOADED`  
-**🎯 For External App mode with auto_start**: Wait for `EXTERNAL_APP_LAUNCHED` to know when the app is ready to receive content
+**For WebView mode**: Wait for `SETTINGS_LOADED`  
+**For External App mode with auto_start**: Wait for `EXTERNAL_APP_LAUNCHED` to know when the app is ready to receive content
 
-### ⏱️ Waiting for External App Launch
+### Waiting for External App Launch
 
 
 
@@ -288,9 +288,9 @@ echo "✅ $PACKAGE is now running and ready!"
 
 
 
-## 🎨 Examples
+## Examples
 
-### 🎮 1. Cloud Gaming Kiosk
+### 1. Cloud Gaming Kiosk
 
 Lock device to a game streaming app with auto-relaunch (production mode):
 
@@ -367,7 +367,7 @@ adb shell am start -n com.freekiosk/.MainActivity \
 
 
 
-### 🔄 5. Modify Existing Configuration
+### 5. Modify Existing Configuration
 
 Change the locked app on an already-configured device:
 
@@ -383,7 +383,7 @@ adb shell am start -n com.freekiosk/.MainActivity \
 
 
 
-## 📋 JSON Configuration Format
+## JSON Configuration Format
 
 When using `--es config '{...}'`, the following keys are supported:
 
@@ -429,7 +429,7 @@ When using `--es config '{...}'`, the following keys are supported:
 
 
 
-## 🔧 Complete Provisioning Script
+## Complete Provisioning Script
 
 Here's a complete bash script for provisioning a new device:
 
@@ -443,19 +443,19 @@ PACKAGE="com.cloudgaming.app"
 PIN="1234"
 API_KEY="my_secret_key"
 
-echo "🔧 Setting Device Owner..."
+echo "Setting Device Owner..."
 adb shell dpm set-device-owner com.freekiosk/.DeviceAdminReceiver
 
-echo "⏳ Waiting for device..."
+echo "Waiting for device..."
 sleep 2
 
-echo "📊 Granting Usage Stats permission (required for foreground monitoring)..."
+echo "Granting Usage Stats permission (required for foreground monitoring)..."
 adb shell appops set com.freekiosk android:get_usage_stats allow
 
-echo "🔑 Granting WRITE_SECURE_SETTINGS (required for auto-enabling accessibility service)..."
+echo "Granting WRITE_SECURE_SETTINGS (required for auto-enabling accessibility service)..."
 adb shell pm grant com.freekiosk android.permission.WRITE_SECURE_SETTINGS
 
-echo "📱 Configuring FreeKiosk..."
+echo "Configuring FreeKiosk..."
 adb shell am start -n com.freekiosk/.MainActivity \
     --es lock_package "$PACKAGE" \
     --es pin "$PIN" \
@@ -485,18 +485,18 @@ $Package = "com.cloudgaming.app"
 $Pin = "1234"
 $ApiKey = "my_secret_key"
 
-Write-Host "🔧 Setting Device Owner..."
+Write-Host "Setting Device Owner..."
 adb shell dpm set-device-owner com.freekiosk/.DeviceAdminReceiver
 
 Start-Sleep -Seconds 2
 
-Write-Host "📊 Granting Usage Stats permission..."
+Write-Host "Granting Usage Stats permission..."
 adb shell appops set com.freekiosk android:get_usage_stats allow
 
-Write-Host "🔑 Granting WRITE_SECURE_SETTINGS..."
+Write-Host "Granting WRITE_SECURE_SETTINGS..."
 adb shell pm grant com.freekiosk android.permission.WRITE_SECURE_SETTINGS
 
-Write-Host "📱 Configuring FreeKiosk..."
+Write-Host "Configuring FreeKiosk..."
 # Note: JSON escaping in PowerShell is complex, use individual parameters
 adb shell am start -n com.freekiosk/.MainActivity `
     --es lock_package $Package `
@@ -514,21 +514,21 @@ Write-Host "✅ Device provisioned!"
 
 
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
-### ❌ Error: "PIN required for first setup"
+### Error: "PIN required for first setup"
 
 **Cause**: Device has no PIN configured, but none was provided.
 
 **Solution**: Add `--es pin "XXXX"` to your command.
 
-### ❌ Error: "PIN required" / "Invalid PIN"
+### Error: "PIN required" / "Invalid PIN"
 
 **Cause**: Device already configured, wrong or missing PIN.
 
 **Solution**: Use the existing PIN configured on the device.
 
-### ❌ Error: "Package not found"
+### Error: "Package not found"
 
 **Cause**: The `lock_package` app is not installed on the device.
 
@@ -537,23 +537,23 @@ Write-Host "✅ Device provisioned!"
 adb install myapp.apk
 ```
 
-### 📱 External app doesn't stay on top / disappears
+### External app doesn't stay on top / disappears
 
 **Cause**: FreeKiosk requires "Display over other apps" (SYSTEM_ALERT_WINDOW) permission to keep external apps locked.
 
 **Solution**:
 
-**🔧 Option 1: Set Device Owner (recommended for kiosks)**
+**Option 1: Set Device Owner (recommended for kiosks)**
 ```bash
 adb shell dpm set-device-owner com.freekiosk/.DeviceAdminReceiver
 ```
 With Device Owner, FreeKiosk can automatically grant itself all required permissions including "appear on top" and "Usage Access".
 
-**⚙️ Option 2: Manual permission (without Device Owner)**
+**Option 2: Manual permission (without Device Owner)**
 1. Go to Settings → Apps → FreeKiosk → Display over other apps
 2. Enable the permission manually
 
-### 📡 EXTERNAL_APP_LAUNCHED not appearing in logcat
+### EXTERNAL_APP_LAUNCHED not appearing in logcat
 
 **Cause**: Without Device Owner, the "Usage Access" (PACKAGE_USAGE_STATS) permission must be granted manually for FreeKiosk to verify that the external app is in the foreground.
 
@@ -602,11 +602,11 @@ adb shell pm clear com.freekiosk
 ```
 
 
-## 🔒 Security Considerations
+## Security Considerations
 
 
 
-| ⚠️ Risk | 🛡️ Mitigation |
+| Risk | Mitigation |
 |---|---|
 | **ADB Access = Full Control** | Anyone with ADB access to an unlocked device can potentially reconfigure it. Disable USB debugging in production. |
 | **PIN Storage** | The ADB PIN is saved to Android Keystore via `react-native-keychain` with PBKDF2 hashing (same secure storage as the UI PIN). The native side also keeps a SHA-256 hash for ADB re-authentication. |
@@ -615,20 +615,20 @@ adb shell pm clear com.freekiosk
 
 
 
-### 📋 Recommendations:
-- 🔐 Use strong PINs (6+ digits)
-- 🔒 Disable USB debugging after setup in production
-- 🏢 Use Device Owner mode for full kiosk lockdown
-- 🔌 Consider physical security of USB port
+### Recommendations:
+- Use strong PINs (6+ digits)
+- Disable USB debugging after setup in production
+- Use Device Owner mode for full kiosk lockdown
+- Consider physical security of USB port
 
 
-## 🔗 See Also
+## See Also
 
 
 
-- [🌐 REST API Documentation](REST-API) - Remote control via HTTP
-- [🏢 MDM Specification](MDM-SPEC) - Enterprise deployment
-- [🔧 Installation Guide](Installation) - Manual setup instructions
+- [REST API Documentation](REST-API) - Remote control via HTTP
+- [MDM Specification](MDM-SPEC) - Enterprise deployment
+- [Installation Guide](Installation) - Manual setup instructions
 
 
 

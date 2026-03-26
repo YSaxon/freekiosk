@@ -1,39 +1,39 @@
 
 
-# 🧪 FreeKiosk Development Guide
+# FreeKiosk Development Guide
 
 **Build, run, and ship FreeKiosk locally**
 
 <p>
-  <a href="README.md">📚 Docs Home</a> •
-  <a href="installation.md">🔧 Installation</a> •
-  <a href="roadmap-and-changelog.md">🗺️ Roadmap</a>
+  <a href="README.md">Docs Home</a> •
+  <a href="installation.md">Installation</a> •
+  <a href="roadmap-and-changelog.md">Roadmap</a>
 </p>
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [📋 Prerequisites](#-prerequisites)
-- [🔧 Additional Requirements](#-additional-requirements)
-- [🚀 Local Setup](#-local-setup)
-- [📱 Run on Android](#-run-on-android)
-- [🔍 Common Issues](#-common-issues)
-- [📦 Build Release APK](#-build-release-apk)
-- [📂 Output Locations](#-output-locations)
-- [🤝 Contributing](#-contributing)
-- [🎯 How to Contribute](#-how-to-contribute)
-- [🔗 Related Technical Docs](#-related-technical-docs)
-- [🏗️ Project Structure](#️-project-structure)
+- [Prerequisites](#prerequisites)
+- [Additional Requirements](#additional-requirements)
+- [Local Setup](#local-setup)
+- [Run on Android](#run-on-android)
+- [Common Issues](#common-issues)
+- [Build Release APK](#build-release-apk)
+- [Output Locations](#output-locations)
+- [Contributing](#contributing)
+- [How to Contribute](#how-to-contribute)
+- [Related Technical Docs](#related-technical-docs)
+- [Project Structure](#project-structure)
 
 
 
 > [!NOTE]
 > This page focuses on **contributor setup**. Operational deployment is documented in [`installation.md`](Installation).
 
-## 📋 Prerequisites
+## Prerequisites
 
 
 
-| ⚙️ Tool | 📏 Version | 📋 Purpose |
+| Tool | Version | Purpose |
 |---|---|---|
 | **Node.js** | 18+ | JavaScript runtime |
 | **React Native CLI** | Latest | Cross-platform development |
@@ -43,13 +43,13 @@
 
 
 
-### 🔧 Additional Requirements
+### Additional Requirements
 
 - **Android SDK** (API level 26+ / Android 8.0+)
 - **Physical Android device** or **Emulator** for testing
 - **USB debugging** enabled on development device
 
-## 🚀 Local Setup
+## Local Setup
 
 
 
@@ -87,15 +87,15 @@ npx react-native run-android --device <device_id>
 
 
 
-### 🔍 Common Issues
+### Common Issues
 
-| ❌ Issue | ✅ Solution |
+| Issue | Solution |
 |---|---|
 | **Metro bundler not starting** | Clear cache: `npm start -- --reset-cache` |
 | **Build fails** | Clean Android build: `cd android && ./gradlew clean && cd ..` |
 | **Device not detected** | Check USB debugging: `adb devices` |
 
-## 📦 Build Release APK
+## Build Release APK
 
 
 
@@ -112,11 +112,11 @@ cd android
 
 
 
-### 📂 Output Locations
+### Output Locations
 
 
 
-| 📄 Format | 📍 Path |
+| Format | Path |
 |---|---|
 | **APK** | `android/app/build/outputs/apk/release/app-release.apk` |
 | **AAB** | `android/app/build/outputs/bundle/release/app-release.aab` |
@@ -126,20 +126,20 @@ cd android
 > [!IMPORTANT]
 > For production builds, make sure to configure your signing keys in `android/app/build.gradle`.
 
-## 🤝 Contributing
+## Contributing
 
 
 
-| 📋 Resource | 🔗 Link |
+| Resource | Link |
 |---|---|
-| **📖 Contributing Guide** | [CONTRIBUTING.md](../CONTRIBUTING.md) |
-| **🐛 Issue Tracker** | [GitHub Issues](https://github.com/rushb-fr/freekiosk/issues) |
-| **💬 Discussions** | [GitHub Discussions](https://github.com/rushb-fr/freekiosk/discussions) |
-| **❓ FAQ** | [FAQ](FAQ) |
+| **Contributing Guide** | [CONTRIBUTING.md](../CONTRIBUTING.md) |
+| **Issue Tracker** | [GitHub Issues](https://github.com/rushb-fr/freekiosk/issues) |
+| **Discussions** | [GitHub Discussions](https://github.com/rushb-fr/freekiosk/discussions) |
+| **FAQ** | [FAQ](FAQ) |
 
 
 
-### 🎯 How to Contribute
+### How to Contribute
 
 1. **Fork** the repository
 2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
@@ -147,22 +147,22 @@ cd android
 4. **Push** to the branch: `git push origin feature/amazing-feature`
 5. **Open** a Pull Request
 
-## 🔗 Related Technical Docs
+## Related Technical Docs
 
 
 
-| 📚 Documentation | 🎯 Focus |
+| Documentation | Focus |
 |---|---|
-| **🔧 Install Guide** | [Installation](Installation) - Manual setup instructions |
-| **⌨️ ADB Configuration** | [ADB-Configuration](ADB-Configuration) - Scripted provisioning |
-| **🌐 REST API** | [REST-API](REST-API) - HTTP endpoints and automation |
-| **📡 MQTT** | [MQTT](MQTT) - Home Assistant integration |
-| **🗺️ Roadmap** | [Roadmap-and-Changelog](Roadmap-and-Changelog) - Release planning |
+| **Install Guide** | [Installation](Installation) - Manual setup instructions |
+| **ADB Configuration** | [ADB-Configuration](ADB-Configuration) - Scripted provisioning |
+| **REST API** | [REST-API](REST-API) - HTTP endpoints and automation |
+| **MQTT** | [MQTT](MQTT) - Home Assistant integration |
+| **Roadmap** | [Roadmap-and-Changelog](Roadmap-and-Changelog) - Release planning |
 
 
 
 
-## 🏗️ Project Structure
+## Project Structure
 
 
 

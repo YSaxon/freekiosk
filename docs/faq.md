@@ -12,12 +12,12 @@
 
 ## 📋 Table of Contents
 
-- [📖 Overview](#-overview)
-- [🔧 Configuration](#-configuration)
-- [🚀 Getting Started](#-getting-started)
-- [📋 Features](#-features)
-- [🚨 Troubleshooting](#-troubleshooting)
-- [🔗 Related Resources](#-related-resources)
+- [📖 Overview](#overview)
+- [🔧 Configuration](#configuration)
+- [🚀 Getting Started](#getting-started)
+- [📋 Features](#features)
+- [🚨 Troubleshooting](#troubleshooting)
+- [🔗 Related Resources](#related-resources)
 
 
 
@@ -260,7 +260,7 @@ adb shell dpm remove-active-admin com.freekiosk/.DeviceAdminReceiver
 
 
 
-See full [Roadmap](../README.md#-roadmap).
+See full [Roadmap](../README.md#roadmap).
 
 
 ## 💬 Support

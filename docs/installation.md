@@ -10,12 +10,12 @@
 
 ## Table of Contents
 
-- [Basic Mode (No PC Required)](#-basic-mode-no-pc-required)
-- [Device Owner Mode (Advanced)](#-device-owner-mode-advanced)
-- [What's the Difference?](#-whats-the-difference)
-- [Troubleshooting](#-troubleshooting)
-- [Removing Device Owner](#-removing-device-owner)
-- [Uninstall](#-uninstall)
+- [Basic Mode (No PC Required)](#basic-mode-no-pc-required)
+- [Device Owner Mode (Advanced)](#device-owner-mode-advanced)
+- [What's the Difference?](#whats-the-difference)
+- [Troubleshooting](#troubleshooting)
+- [Removing Device Owner](#removing-device-owner)
+- [Uninstall](#uninstall)
 
 
 ## Basic Mode (No PC Required)

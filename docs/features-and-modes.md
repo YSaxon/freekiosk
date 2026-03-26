@@ -10,10 +10,10 @@
 
 ## Table of Contents
 
-- [Display Modes](#-display-modes)
-- [Security & Control](#-security--control)
-- [Provisioning & Operations](#-provisioning--operations)
-- [Choosing Your Mode](#-choosing-your-mode)
+- [Display Modes](#display-modes)
+- [Security & Control](#security--control)
+- [Provisioning & Operations](#provisioning--operations)
+- [Choosing Your Mode](#choosing-your-mode)
 
 
 ## Display Modes

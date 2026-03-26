@@ -12,12 +12,12 @@
 
 ## 📋 Table of Contents
 
-- [📖 Overview](#-overview)
-- [🔧 Configuration](#-configuration)
-- [🚀 Getting Started](#-getting-started)
-- [📋 Features](#-features)
-- [🚨 Troubleshooting](#-troubleshooting)
-- [🔗 Related Resources](#-related-resources)
+- [📖 Overview](#overview)
+- [🔧 Configuration](#configuration)
+- [🚀 Getting Started](#getting-started)
+- [📋 Features](#features)
+- [🚨 Troubleshooting](#troubleshooting)
+- [🔗 Related Resources](#related-resources)
 
 
 

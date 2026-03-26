@@ -5,7 +5,6 @@
 _Operational guides, integrations and technical reference for production kiosk deployments._
 
 <p>
-  <a href="Home">Main README</a> •
   <a href="Installation">Install</a> •
   <a href="REST-API">REST API</a> •
   <a href="MQTT">MQTT</a>

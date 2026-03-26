@@ -1,89 +1,65 @@
+# Integrations
 
+**Connect FreeKiosk to your automation stack**
 
-# 🔌 FreeKiosk Integrations
+[Docs Home](README) • [REST API](REST-API) • [MQTT](MQTT)
 
-**Connect FreeKiosk to your automation stack with REST and MQTT, or both together**
-
-<p>
-  <a href="README.md">📚 Docs Home</a> •
-  <a href="rest-api.md">🌐 REST API</a> •
-  <a href="MQTT.md">📡 MQTT</a>
-</p>
-
-## 📋 Table of Contents
-
-- [📖 Overview](#-overview)
-- [🔧 Configuration](#-configuration)
-- [🚀 Getting Started](#-getting-started)
-- [📋 Features](#-features)
-- [🚨 Troubleshooting](#-troubleshooting)
-- [🔗 Related Resources](#-related-resources)
-
-
-
+---
 
 > [!IMPORTANT]
-> REST and MQTT can run simultaneously on the same device.
+> REST API and MQTT can run simultaneously on the same device.
 
-## 🤖 Home Assistant and Automation
+## Table of Contents
 
-FreeKiosk supports two main integration channels for seamless automation:
+- [Integration Channels](#integration-channels)
+- [REST API](#rest-api)
+- [MQTT](#mqtt)
+- [Headless Setup](#headless-setup)
+- [Choosing Your Integration](#choosing-your-integration)
 
+---
 
+## Integration Channels
 
-| 🔌 Channel | 🎯 Best When | 📖 Reference |
-|---|---|---|
-| **🌐 REST API** | Request/response control on demand | [REST API Documentation](REST-API) |
-| **📡 MQTT** | Push telemetry + Home Assistant discovery | [MQTT Documentation](MQTT) |
+FreeKiosk offers two main integration methods:
 
+| Channel | Best For | Documentation |
+|---------|----------|---------------|
+| **REST API** | On-demand control via HTTP | [REST API Docs](REST-API) |
+| **MQTT** | Real-time telemetry + Home Assistant | [MQTT Docs](MQTT) |
 
+### Feature Comparison
 
-### 🔄 Integration Overview
+| Feature | REST API | MQTT |
+|---------|:--------:|:----:|
+| **Control Method** | Request/response | Push commands |
+| **Telemetry** | Polling | Real-time |
+| **HA Discovery** | Manual | Auto |
+| **Availability** | HTTP status | LWT |
+| **Security** | API key | Username/password |
 
+---
 
+## REST API
 
-| ⚡ Feature | 🌐 REST API | 📡 MQTT |
-|---|---|---|
-| **🎛️ Control** | Request/response | Push commands |
-| **📊 Telemetry** | Polling endpoints | Real-time publishing |
-| **🏠 HA Discovery** | Manual setup | Auto-discovery |
-| **📱 Availability** | HTTP status | LWT (Last Will) |
-| **🔐 Security** | API key auth | Username/password |
+**HTTP-based control for on-demand device management.**
 
+### Key Features
 
+- **40+ Endpoints** - Complete device control
+- **Device Status** - Real-time sensor data
+- **Navigation Control** - URL and app switching
+- **Media Capture** - Screenshot & camera access
+- **API Security** - Optional API key authentication
 
-## 🌐 REST API
+### Best For
 
-Perfect for on-demand control and monitoring through HTTP requests.
+- Home Assistant HTTP integration
+- Mobile app control
+- Shell scripts (curl/wget)
+- Web dashboards (JavaScript)
 
-
-
-### ✨ Key Features
-
-| ⚡ Capability | 📋 Details |
-|---|---|
-| **🔧 40+ Endpoints** | Complete device control |
-| **📊 Device Status** | Real-time sensor data |
-| **🎮 Navigation Control** | URL and app switching |
-| **📸 Media Capture** | Screenshot & camera access |
-| **🔐 API Security** | Optional API key authentication |
-
-
-
-### 🎯 Use Cases
-
-
-
-| 🎭 Scenario | 🌐 REST API Advantage |
-|---|---|
-| **🏠 Home Assistant** | Direct HTTP integration |
-| **📱 Mobile Apps** | RESTful API calls |
-| **🔧 Scripts** | Simple curl/wget commands |
-| **🌐 Web Dashboards** | JavaScript fetch() calls |
-
-
-
-### 📖 Quick Start
+### Quick Start
 
 ```bash
 # Get device status
@@ -93,50 +69,40 @@ curl -H "X-Api-Key: your-key" http://tablet-ip:8080/api/status
 curl -X POST -H "X-Api-Key: your-key" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://new-dashboard.com"}' \
-  http://tablet-ip:8080/api/navigate
+  http://tablet-ip:8080/api/url
 
 # Take screenshot
-curl -H "X-Api-Key: your-key" http://tablet-ip:8080/api/screenshot
+curl -H "X-Api-Key: your-key" http://tablet-ip:8080/api/screenshot -o screenshot.png
 ```
 
-> [!NOTE]
-> For complete endpoint reference, see [REST API Documentation](REST-API).
+> [!TIP]
+> See the complete [REST API Reference](REST-API) for all endpoints.
 
-## 📡 MQTT
+---
 
-Ideal for real-time automation and Home Assistant auto-discovery.
+## MQTT
 
+**Real-time telemetry and Home Assistant auto-discovery.**
 
+### Key Features
 
-### ✨ Key Features
+- **MQTT Protocol** - v5 / v3.1.1 support
+- **HA Discovery** - Auto-configuration in Home Assistant
+- **Availability** - LWT (Last Will Testament) status
+- **Telemetry** - Real-time sensor publishing
+- **Remote Control** - Command subscription topics
 
-| ⚡ Capability | 📋 Details |
-|---|---|
-| **🔄 MQTT Protocol** | v5 / v3.1.1 support |
-| **🏠 HA Discovery** | Auto-configuration in Home Assistant |
-| **📱 Availability** | LWT (Last Will Testament) status |
-| **📊 Telemetry** | Real-time sensor publishing |
-| **🎮 Remote Control** | Command subscription topics |
+### Best For
 
+- Home Assistant integration (auto-discovery)
+- Continuous monitoring
+- Event-based automation
+- Multi-device management
 
+### Quick Start
 
-### 🎯 Use Cases
-
-
-
-| 🎭 Scenario | 📡 MQTT Advantage |
-|---|---|
-| **🏠 Home Assistant** | Auto-discovery + real-time updates |
-| **📊 Monitoring** | Continuous telemetry streams |
-| **🔔 Notifications** | Event-based automation |
-| **🌐 Multi-device** | Central broker management |
-
-
-
-### 📖 Quick Start
-
+**Home Assistant configuration:**
 ```yaml
-# Home Assistant configuration.yaml
 mqtt:
   broker: your-broker-ip
   port: 1883
@@ -144,45 +110,41 @@ mqtt:
   discovery_prefix: homeassistant
 ```
 
-**MQTT Topics Structure:**
+**Topic structure:**
 ```
-freekiosk/tablet1/status/online      # Device availability
-freekiosk/tablet1/sensor/battery      # Battery level
-freekiosk/tablet1/signal/rssi         # WiFi strength
-freekiosk/tablet1/command/navigate    # URL navigation
-freekiosk/tablet1/command/reload      # Page reload
+freekiosk/lobby/availability         # Device online/offline
+freekiosk/lobby/state                # All sensor data (JSON)
+freekiosk/lobby/set/brightness       # Set brightness command
+freekiosk/lobby/set/url              # Navigate to URL
 ```
 
-> [!NOTE]
-> For complete MQTT configuration, see [MQTT Documentation](MQTT).
+> [!TIP]
+> See the complete [MQTT Reference](MQTT) for topics and commands.
 
-## ⚙️ Headless Setup
+---
 
-Configure integrations without UI using ADB intent parameters for mass deployment.
+## Headless Setup
 
+**Configure integrations via ADB for mass deployment.**
 
+### Configuration Parameters
 
-### 🛠️ ADB Configuration Options
+**REST API:**
+- `rest_api_enabled` - Enable REST API (`"true"`)
+- `rest_api_port` - API port (`"8080"`)
+- `rest_api_key` - API authentication key
 
-| ⚙️ Parameter | 🌐 REST API | 📡 MQTT |
-|---|---|---|
-| **`rest_api_enabled`** | `"true"` | - |
-| **`rest_api_port`** | `"8080"` | - |
-| **`rest_api_key`** | `"your-secret-key"` | - |
-| **`mqtt_enabled`** | - | `"true"` |
-| **`mqtt_broker_url`** | - | `"broker-ip"` |
-| **`mqtt_port`** | - | `"1883"` |
-| **`mqtt_username`** | - | `"username"` |
-| **`mqtt_password`** | - | `"password"` |
-| **`mqtt_discovery_prefix`** | - | `"homeassistant"` |
+**MQTT:**
+- `mqtt_enabled` - Enable MQTT (`"true"`)
+- `mqtt_broker_url` - Broker IP/hostname
+- `mqtt_port` - Broker port (`"1883"`)
+- `mqtt_username` - MQTT username
+- `mqtt_password` - MQTT password
+- `mqtt_discovery_prefix` - HA discovery prefix (`"homeassistant"`)
 
+### Example Commands
 
-
-### 🎯 Example Commands
-
-
-
-**REST API Only:**
+**REST API only:**
 ```bash
 adb shell am start -n com.freekiosk/.MainActivity \
     --es rest_api_enabled "true" \
@@ -191,7 +153,7 @@ adb shell am start -n com.freekiosk/.MainActivity \
     --es pin "1234"
 ```
 
-**MQTT Only:**
+**MQTT only:**
 ```bash
 adb shell am start -n com.freekiosk/.MainActivity \
     --es mqtt_enabled "true" \
@@ -201,7 +163,7 @@ adb shell am start -n com.freekiosk/.MainActivity \
     --es pin "1234"
 ```
 
-**Both Together:**
+**Both together:**
 ```bash
 adb shell am start -n com.freekiosk/.MainActivity \
     --es rest_api_enabled "true" \
@@ -214,58 +176,44 @@ adb shell am start -n com.freekiosk/.MainActivity \
     --es pin "1234"
 ```
 
-
-
 > [!NOTE]
-> For complete ADB provisioning guide, see [ADB Configuration Guide](ADB-Configuration).
+> See the complete [ADB Configuration Guide](ADB-Configuration) for all parameters.
 
+---
 
-## 🎯 Choosing Your Integration
+## Choosing Your Integration
 
+### Decision Guide
 
+| Use Case | Recommended | Why |
+|----------|-------------|-----|
+| **Home Assistant** | MQTT | Auto-discovery + real-time |
+| **Mobile App** | REST API | Simple HTTP requests |
+| **Monitoring** | REST API | Polling for status |
+| **Event Automation** | MQTT | Push-based notifications |
+| **Web Integration** | REST API | JavaScript friendly |
+| **Multi-Device Fleet** | MQTT | Central broker |
+| **Scripts** | REST API | Easy curl commands |
+| **Real-time Control** | Both | Best of both worlds |
 
-| 🎭 Use Case | 🔌 Recommended Integration | 🎯 Why |
-|---|---|---|
-| **🏠 Home Assistant** | **MQTT** | Auto-discovery + real-time updates |
-| **📱 Mobile App Control** | **REST API** | Simple HTTP requests |
-| **📊 Monitoring Dashboard** | **REST API** | Polling for status |
-| **🔔 Event-Driven Automation** | **MQTT** | Push-based notifications |
-| **🌐 Web Integration** | **REST API** | JavaScript fetch() friendly |
-| **🏭 Multi-Device Fleet** | **MQTT** | Central broker management |
-| **🔧 Simple Scripts** | **REST API** | Easy curl commands |
-| **🔄 Real-time Control** | **Both** | MQTT for events, REST for commands |
+### Hybrid Approach
 
+Use both for maximum flexibility:
 
+- **MQTT** - Continuous telemetry and HA discovery
+- **REST API** - On-demand commands and media capture
+- **ADB** - Initial provisioning and bulk configuration
 
-### 🔄 Hybrid Approach
+---
 
+## Related Documentation
 
+- **REST API:** [Complete endpoint reference](REST-API)
+- **MQTT:** [Topics, discovery, and commands](MQTT)
+- **ADB Configuration:** [Headless provisioning](ADB-Configuration)
+- **Installation:** [Device setup guide](Installation)
+- **FAQ:** [Common questions](FAQ)
 
-**Best of both worlds:**
-- **📡 MQTT** for continuous telemetry and Home Assistant discovery
-- **🌐 REST API** for on-demand commands and media capture
-- **⚙️ ADB** for initial provisioning and bulk configuration
+---
 
-
-
-
-## 🔗 Related Documentation
-
-
-
-| 📚 Document | 🎯 Focus |
-|---|---|
-| **🌐 REST API** | [Complete endpoint reference](REST-API) |
-| **📡 MQTT** | [MQTT configuration and topics](MQTT) |
-| **⌨️ ADB Configuration** | [Scripted provisioning guide](ADB-Configuration) |
-| **🔧 Installation** | [Device setup instructions](Installation) |
-| **❓ FAQ** | [Common integration questions](FAQ) |
-
-
-
-
-
-
-**Made with ❤️ by [FreeKiosk Team](https://freekiosk.app)**
-
-
+**Made with ❤️ by [Rushb](https://rushb.fr)**

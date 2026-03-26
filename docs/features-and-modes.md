@@ -1,196 +1,188 @@
+# Features and Modes
 
+**Understanding FreeKiosk's display modes and capabilities**
 
-# 🧭 FreeKiosk Features and Modes
+[Docs Home](README) • [Installation](Installation) • [Integrations](Integrations)
 
-**A quick map of how FreeKiosk can run, lock, and present content on Android tablets**
-
-<p>
-  <a href="README.md">📚 Docs Home</a> •
-  <a href="installation.md">🔧 Installation</a> •
-  <a href="INTEGRATIONS.md">🔗 Integrations</a>
-</p>
-
-## 📋 Table of Contents
-
-- [📖 Overview](#-overview)
-- [🔧 Configuration](#-configuration)
-- [🚀 Getting Started](#-getting-started)
-- [📋 Features](#-features)
-- [🚨 Troubleshooting](#-troubleshooting)
-- [🔗 Related Resources](#-related-resources)
-
-
-
+---
 
 > [!TIP]
-> Use this page to choose your operational mode first, then jump to setup and automation guides.
+> Choose your operational mode first, then proceed to [Installation](Installation) and [Integrations](Integrations).
 
-## 🎛️ Core Features
+## Table of Contents
 
+- [Display Modes](#-display-modes)
+- [Security & Control](#-security--control)
+- [Provisioning & Operations](#-provisioning--operations)
+- [Choosing Your Mode](#-choosing-your-mode)
 
+---
 
-| ✅ Feature | 📋 Description |
-|---|---|
-| **🌐 Kiosk Browser Mode** | WebView-based web content display |
-| **📱 External App Mode** | Lock to a specific Android application |
-| **🏢 Device Owner Support** | Enterprise-grade full device lockdown |
-| **🔐 PIN Protection** | Secure settings access with authentication |
-| **📌 Screen Pinning** | Optional task locking policies |
+## Display Modes
 
+### WebView Mode
 
+**Display any website in fullscreen kiosk mode.**
 
-## 🖥️ Display Modes
-
-### 🌐 WebView Mode
-
-
-
-**Perfect for dashboards, web apps, and websites**
-
-| ⚡ Capability | 📋 Details |
-|---|---|
-| **🔗 URL Display** | Any HTTPS/HTTP website or dashboard |
-| **🔒 SSL Support** | Including self-signed certificates |
-| **📱 Immersive** | Fullscreen kiosk experience |
-| **🏠 Home Assistant** | Native integration with HA dashboards |
-
-
+**Capabilities:**
+- Any HTTPS/HTTP URL
+- SSL support (including self-signed certificates)
+- Fullscreen immersive experience
+- Perfect for Home Assistant dashboards
 
 **Best for:**
 - Home Assistant dashboards
 - Information displays
 - Web-based applications
 - Digital signage
+- Corporate dashboards
 
-### 📱 External App Mode
+### External App Mode
 
+**Lock the tablet to a specific Android application.**
 
-
-**Lock device to a specific Android application**
-
-| ⚡ Capability | 📋 Details |
-|---|---|
-| **🎯 App Locking** | Lock to any installed Android app |
-| **🔄 Auto-relaunch** | Automatic app restart on exit/crash |
-| **🧪 Test Mode** | Safe deployment with back button access |
-| **🔐 Secure Access** | 5-tap gesture + PIN for settings |
-
-
+**Capabilities:**
+- Lock to any installed Android app
+- Auto-relaunch on exit/crash
+- Test mode for safe deployment
+- 5-tap gesture + PIN for settings access
 
 **Best for:**
 - Cloud gaming (Steam Link, Xbox Cloud Gaming)
 - Digital signage apps
 - Corporate applications
 - Media players
+- Custom Android apps
 
-### 📊 Dashboard Mode
+### Dashboard Mode
 
+**Multi-URL tile grid for quick navigation between multiple dashboards.**
 
-
-**Multi-URL tile grid for quick navigation**
-
-| ⚡ Capability | 📋 Details |
-|---|---|
-| **🔷 Tile Grid** | Multiple configurable URL tiles |
-| **👆 One-tap Navigation** | Quick access to different resources |
-| **⏰ Inactivity Return** | Auto-return to dashboard after timeout |
-| **🎨 Customizable** | Custom names and URLs for each tile |
-
-
+**Capabilities:**
+- Configurable tile grid
+- One-tap navigation between URLs
+- Auto-return to dashboard after inactivity
+- Custom names and URLs for each tile
 
 **Best for:**
 - Multi-dashboard environments
 - Resource collections
 - Quick access portals
 - Control centers
+- Multiple Home Assistant views
 
-### 🎬 Media / Multi-App Enhancements
+### Media Mode
 
+**Enhanced media playback and multi-app support.**
 
+**Capabilities:**
+- Native media player integration
+- Multi-app switching
+- Time-based content scheduling
+- Performance monitoring
 
-**Advanced features for media and multi-app deployments**
-
-Recent versions include significant improvements for:
-
-- **🎥 Media Player Integration** - Enhanced video and audio playback
-- **📱 Multi-App Support** - Switch between multiple applications
-- **🎯 Advanced Scheduling** - Time-based content switching
-- **📊 Performance Monitoring** - Resource usage tracking
-
-
+**Best for:**
+- Video playback
+- Audio streaming
+- Media galleries
+- Scheduled content rotation
 
 > [!NOTE]
-> For detailed release information, see [Roadmap and Changelog](Roadmap-and-Changelog).
+> See [Roadmap and Changelog](Roadmap-and-Changelog) for detailed release information.
 
-## 🔐 Security and Control
+---
 
+## Security & Control
 
+### Lockdown Levels
 
-| 🛡️ Security Feature | 📋 Protection Level |
-|---|---|
-| **🏢 Device Owner** | Complete device control and lockdown |
-| **🚫 Navigation Blocking** | Disable home, recent, settings access |
-| **📱 Overlay Prevention** | Block system dialogs and notifications |
-| **🐕 Watchdog Service** | Automatic kiosk recovery and monitoring |
-
-
-
-### 🔒 Lockdown Levels
-
-
-
-| 🔒 Level | 📋 Description | 🎯 Use Case |
-|---|---|---|
-| **Basic** | WebView kiosk with minimal restrictions | Simple displays |
+| Level | Description | Use Case |
+|-------|-------------|----------|
+| **Basic** | WebView kiosk with minimal restrictions | Testing, personal use |
 | **Standard** | External app with navigation blocking | Single-app deployments |
-| **Enterprise** | Device Owner full lockdown | Corporate/public kiosks |
+| **Enterprise** | Device Owner full lockdown | Production, public kiosks |
 
+### Security Features
 
+- **Device Owner Mode** - Complete device control
+- **Navigation Blocking** - Disable home, recent apps, settings
+- **Overlay Prevention** - Block system dialogs and notifications
+- **Watchdog Service** - Automatic recovery and monitoring
+- **PIN Protection** - Secure settings access
+- **Screen Pinning** - Task locking policies
 
-## ⚙️ Provisioning and Operations
+---
 
+## Provisioning & Operations
 
+### Deployment Methods
 
-| 🚀 Operational Feature | 📋 Capability |
-|---|---|
-| **⌨️ ADB Provisioning** | Headless scripted deployment |
-| **💾 Configuration Backup** | Save/restore complete settings |
-| **🚀 Auto-launch** | Boot-time automatic startup |
-| **🔄 Keep-alive** | Continuous monitoring and recovery |
-| **📡 Remote Control** | REST API and MQTT automation |
+| Method | Tools | Scale | Guide |
+|--------|-------|-------|-------|
+| **Manual** | Touch interface | Single device | [Installation](Installation) |
+| **ADB Script** | Command line | Small batches | [ADB Config](ADB-Configuration) |
+| **MDM Integration** | Enterprise tools | Large fleets | Coming soon |
 
+### Operational Features
 
+- **ADB Provisioning** - Headless scripted deployment
+- **Configuration Backup** - Save/restore complete settings
+- **Auto-launch** - Boot-time automatic startup
+- **Keep-alive** - Continuous monitoring and recovery
+- **Remote Control** - REST API and MQTT automation
+- **Mass Deployment** - Configure multiple devices via scripts
 
-### 🎯 Deployment Methods
+---
 
+## Choosing Your Mode
 
+### Quick Decision Guide
 
-| 📋 Method | 🛠️ Tools | 📏 Scale |
-|---|---|---|
-| **Manual** | Touch interface | Single device |
-| **ADB Script** | Command line | Small batches |
-| **MDM Integration** | Enterprise tools | Large fleets |
+| Use Case | Recommended Mode | Setup Guide |
+|----------|------------------|-------------|
+| **Home Assistant Dashboard** | WebView Mode | [Installation](Installation) |
+| **Cloud Gaming Kiosk** | External App + Device Owner | [ADB Configuration](ADB-Configuration) |
+| **Corporate Kiosk** | External App + Device Owner | [Installation](Installation) |
+| **Multi-Dashboard** | Dashboard Mode | [Installation](Installation) |
+| **Media Display** | Media Mode | [Installation](Installation) |
+| **Custom Android App** | External App Mode | [ADB Configuration](ADB-Configuration) |
 
+### Configuration Examples
 
+**Home Assistant Dashboard:**
+```bash
+adb shell am start -n com.freekiosk/.MainActivity \
+    --es url "https://homeassistant.local:8123" \
+    --es pin "1234"
+```
 
+**Cloud Gaming Kiosk:**
+```bash
+adb shell am start -n com.freekiosk/.MainActivity \
+    --es lock_package "com.valvesoftware.steamlink" \
+    --es pin "1234" \
+    --es test_mode "false"
+```
 
-## 🎯 Choosing Your Mode
+**Corporate Information Display:**
+```bash
+adb shell am start -n com.freekiosk/.MainActivity \
+    --es url "https://dashboard.company.com" \
+    --es pin "0000" \
+    --es rest_api_enabled "true"
+```
 
+---
 
+## Next Steps
 
-| 🎭 Use Case | 🎯 Recommended Mode | 🔧 Setup Guide |
-|---|---|---|
-| **🏠 Home Dashboard** | WebView Mode | [Installation](Installation) |
-| **🎮 Cloud Gaming** | External App + Device Owner | [ADB Configuration](ADB-Configuration) |
-| **🏢 Corporate Kiosk** | External App + Enterprise Lock | [Installation Guide](Installation) |
-| **📊 Multi-Dashboard** | Dashboard Mode | [Installation](Installation) |
-| **🎬 Media Display** | Media Mode | [Roadmap](Roadmap-and-Changelog) |
+- **Installation:** [Complete setup guide](Installation)
+- **Integrations:** [REST API and MQTT](Integrations)
+- **ADB Provisioning:** [Headless deployment](ADB-Configuration)
+- **FAQ:** [Common questions](FAQ)
 
+---
 
-
-
-
-
-**Made with ❤️ by [FreeKiosk Team](https://freekiosk.app)**
+**Made with ❤️ by [Rushb](https://rushb.fr)**
 
 

@@ -1,35 +1,24 @@
 # FreeKiosk Documentation
 
-This is the single documentation hub for FreeKiosk.
+Wiki for setup, operations, integrations, and development.
 
-## Start Here
+## Core Guides
 
-- [Installation Guide](INSTALL.md)
-- [Features and Modes](FEATURES_AND_MODES.md)
-- [Integrations](INTEGRATIONS.md)
-- [Roadmap and Changelog](ROADMAP_AND_CHANGELOG.md)
-- [Development](DEVELOPMENT.md)
-- [FAQ](FAQ.md)
+- [Installation](installation.md)
+- [Features and Modes](features-and-modes.md)
+- [Integrations](integrations.md)
+- [Roadmap and Changelog](roadmap-and-changelog.md)
+- [Development](development.md)
+- [FAQ](faq.md)
 
 ## Technical Reference
 
-- [ADB Configuration](ADB_CONFIG.md)
-- [REST API](REST_API.md)
-- [MQTT](MQTT.md)
+- [ADB Configuration](adb-configuration.md)
+- [REST API](rest-api.md)
+- [MQTT](mqtt.md)
+- [Pipeline and Wiki Sync](pipeline-and-wiki-sync.md)
 
-## What is FreeKiosk
-
-FreeKiosk is a free, open-source kiosk app for Android tablets.
-
-Main capabilities:
-
-- Full lockdown with Android `Device Owner`
-- WebView mode and External App mode
-- PIN/password protection and optional screen pinning
-- Home Assistant integrations via REST API and MQTT
-- ADB headless provisioning for large deployments
-
-## Quick Links
+## Project Links
 
 - Website: [freekiosk.app](https://freekiosk.app)
 - Releases: [GitHub Releases](https://github.com/rushb-fr/freekiosk/releases)

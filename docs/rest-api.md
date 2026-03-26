@@ -9,7 +9,7 @@ FreeKiosk includes a built-in REST API server for integration with **Home Assist
 - **Authentication**: Optional API Key (X-Api-Key header)
 - **Format**: JSON responses
 
-> 💡 **Note**: Some API features require **Device Owner mode** for full functionality (true screen off, reboot). The HTTP server remains accessible even when the screen is off (v1.2.4+). See [Installation Guide](INSTALL.md#advanced-install-device-owner-mode) for Device Owner setup instructions.
+> 💡 **Note**: Some API features require **Device Owner mode** for full functionality (true screen off, reboot). The HTTP server remains accessible even when the screen is off (v1.2.4+). See [Installation Guide](installation.md#advanced-install-device-owner-mode) for Device Owner setup instructions.
 
 ## Enabling the API
 
@@ -29,7 +29,7 @@ adb shell am start -n com.freekiosk/.MainActivity \
     --es rest_api_key "your_secret_key"
 ```
 
-See [ADB Configuration Guide](ADB_CONFIG.md) for full headless provisioning.
+See [ADB Configuration Guide](adb-configuration.md) for full headless provisioning.
 
 ---
 
@@ -340,7 +340,7 @@ Turn screen off.
 >
 > This means FreeKiosk can coexist with an existing MDM that holds Device Owner — just activate Device Admin or the AccessibilityService and screen lock works fully.
 > 
-> To enable Device Owner mode, see [Installation Guide](INSTALL.md#advanced-install-device-owner-mode).
+> To enable Device Owner mode, see [Installation Guide](installation.md#advanced-install-device-owner-mode).
 
 #### `GET|POST /api/screensaver/on`
 Enable the screensaver setting. The screensaver will activate automatically after the configured inactivity timeout.
@@ -957,9 +957,9 @@ Common errors:
 
 ## See Also
 
-- [ADB Configuration Guide](ADB_CONFIG.md) - Headless provisioning via ADB
+- [ADB Configuration Guide](adb-configuration.md) - Headless provisioning via ADB
 - [MDM Specification](MDM_SPEC.md) - Enterprise deployment
-- [Installation Guide](INSTALL.md) - Manual setup
+- [Installation Guide](installation.md) - Manual setup
 
 ---
 

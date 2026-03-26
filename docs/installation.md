@@ -17,12 +17,12 @@ Complete guide to install and configure FreeKiosk on your Android tablet.
 
 ### Requirements
 - Android tablet 8.0+
-- APK file from [Releases](https://github.com/rushb/freekiosk/releases)
+- APK file from [Releases](https://github.com/rushb-fr/freekiosk/releases)
 
 ### Steps
 
 1. **Download APK**
-   - Go to [Releases](https://github.com/rushb/freekiosk/releases)
+   - Go to [Releases](https://github.com/rushb-fr/freekiosk/releases)
    - Download `FreeKiosk-v1.0.0.apk`
 
 2. **Install**
@@ -331,9 +331,9 @@ A: Should work, but not officially tested. Device Owner setup may differ.
 
 ## Need Help?
 
-- 📖 Check [FAQ](FAQ.md)
-- 💬 Open a [Discussion](https://github.com/rushb/freekiosk/discussions)
-- 🐛 Report a [Bug](https://github.com/rushb/freekiosk/issues)
+- 📖 Check [FAQ](faq.md)
+- 💬 Open a [Discussion](https://github.com/rushb-fr/freekiosk/discussions)
+- 🐛 Report a [Bug](https://github.com/rushb-fr/freekiosk/issues)
 - 📧 Email: support@freekiosk.app
 
 ---

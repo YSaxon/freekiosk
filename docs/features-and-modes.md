@@ -30,7 +30,7 @@
 
 ### Media / Multi-App Enhancements
 
-Recent versions include media-player and multi-app deployment improvements. See release notes in [Roadmap and Changelog](ROADMAP_AND_CHANGELOG.md).
+Recent versions include media-player and multi-app deployment improvements. See release notes in [Roadmap and Changelog](roadmap-and-changelog.md).
 
 ## Security and Control
 

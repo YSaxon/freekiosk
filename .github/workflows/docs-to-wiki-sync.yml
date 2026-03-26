@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-to-wiki-sync.yml'
   workflow_dispatch:
 
 permissions:
@@ -64,7 +67,7 @@ jobs:
         working-directory: wiki-repo
         run: |
           if [ -z "$(git status --porcelain)" ]; then
-            echo "No wiki changes to publish"
+            echo "No docs changes to publish to wiki"
             exit 0
           fi
 

@@ -20,7 +20,7 @@ Highlights:
 
 Reference:
 
-- [REST API Documentation](REST_API.md)
+- [REST API Documentation](rest-api.md)
 
 ## MQTT
 
@@ -34,7 +34,7 @@ Highlights:
 
 Reference:
 
-- [MQTT Documentation](MQTT.md)
+- [MQTT Documentation](mqtt.md)
 
 ## Headless Setup
 
@@ -42,4 +42,4 @@ You can provision integrations without UI using ADB intent parameters.
 
 Reference:
 
-- [ADB Configuration Guide](ADB_CONFIG.md)
+- [ADB Configuration Guide](adb-configuration.md)

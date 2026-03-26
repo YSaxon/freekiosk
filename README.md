@@ -23,19 +23,20 @@ FreeKiosk is a free alternative to commercial kiosk apps with:
 
 For production deployments with complete lockdown, use Device Owner setup:
 
-- [Installation Guide](docs/INSTALL.md#advanced-install-device-owner-mode)
+- [Installation Guide](docs/installation.md#advanced-install-device-owner-mode)
 
 ## Documentation Hub
 
 All documentation is now centralized in `docs/`.
 
 - [Documentation Home](docs/README.md)
-- [Installation](docs/INSTALL.md)
-- [Features and Modes](docs/FEATURES_AND_MODES.md)
-- [Integrations](docs/INTEGRATIONS.md)
-- [Roadmap and Changelog](docs/ROADMAP_AND_CHANGELOG.md)
-- [Development](docs/DEVELOPMENT.md)
-- [FAQ](docs/FAQ.md)
+- [Installation](docs/installation.md)
+- [Features and Modes](docs/features-and-modes.md)
+- [Integrations](docs/integrations.md)
+- [Roadmap and Changelog](docs/roadmap-and-changelog.md)
+- [Development](docs/development.md)
+- [Pipeline and Wiki Sync](docs/pipeline-and-wiki-sync.md)
+- [FAQ](docs/faq.md)
 
 ## Contributing
 

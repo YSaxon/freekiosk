@@ -11,7 +11,7 @@
   </p>
   
   <p>
-    <img src="https://img.shields.io/badge/Version-1.2.17-blue.svg" alt="Version 1.2.17">
+    <img src="https://img.shields.io/badge/Version-1.2.18-blue.svg" alt="Version 1.2.18">
     <a href="https://github.com/rushb-fr/freekiosk/releases"><img src="https://img.shields.io/github/downloads/rushb-fr/freekiosk/total.svg" alt="Downloads"></a>
     <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT">
     <img src="https://img.shields.io/badge/Android-8.0%2B-green.svg" alt="Android 8.0+">
@@ -290,7 +290,18 @@ Done! Your tablet is now in kiosk mode.
 
 ## 🗺️ Roadmap
 
-### ✅ v1.2.17 (Mar 2026) - Media Player, Dashboard, Multi-App & Boot Lock 🆕
+### ✅ v1.2.18 (Mar 2026) - Printing, Auto-Brightness Offset & Bug Fixes 🆕
+- 🖨️ **Allow Printing**: `window.print()` support with native Android PrintManager, auto-whitelisted in Lock Task Mode
+- ☀️ **Auto-Brightness Offset**: Add fixed % offset to auto-brightness calculation (+0–50%)
+- 🗣️ **TTS multilingual**: Auto language detection for Chinese, Japanese, Korean, Arabic, Thai & more
+- 📱 **Show all packages**: App picker now reveals background services/VPNs with toggle
+- 🔌 **ADB multi-app config**: Configure multi-app mode via ADB intents with JSON array
+- 🔊 **Volume button hold fix**: Holding volume no longer triggers PIN request
+- 🔒 **Boot Lock crash fix**: BootLockActivity NullPointerException on boot resolved
+- 📡 **MQTT audio commands**: `audio_play`, `audio_beep`, `audio_stop` now work via MQTT
+- 📖 **Device Owner docs**: Clarified factory reset is not required
+
+### ✅ v1.2.17 (Mar 2026) - Media Player, Dashboard, Multi-App & Boot Lock
 - 🎬 **Media Player Mode**: New display mode — play videos & images in full-screen kiosk with playlist, crossfade, shuffle, local file picker & remote URLs
 - 📊 **Dashboard Mode**: Configurable grid of URL tiles with navigation bar
 - 📱 **Multi-App Mode**: Manage multiple apps on a home screen grid, all whitelisted in Lock Task Mode

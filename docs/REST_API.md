@@ -365,7 +365,18 @@ Text-to-speech. Uses Android native TextToSpeech engine (handled server-side, no
 ```json
 { "text": "Hello World" }
 ```
-> 💡 Uses the system default TTS language. The TTS engine is initialized when the HTTP server starts.
+
+**Parameters:**
+- `text` (string, required): The text to speak
+- `language` (string, optional): BCP 47 language tag (e.g. `"zh-CN"`, `"en-US"`, `"fr"`, `"ja"`, `"ko"`). If omitted, the language is **auto-detected** from the text content based on Unicode script analysis (CJK → Chinese, Hangul → Korean, Hiragana/Katakana → Japanese, Arabic script → Arabic, Thai → Thai, Devanagari → Hindi, Cyrillic → Russian, Latin → device default)
+
+**Examples:**
+```json
+{ "text": "你好世界" }
+{ "text": "Hello World", "language": "en-US" }
+{ "text": "こんにちは", "language": "ja" }
+```
+> 💡 Language is auto-detected from text content when `language` is not specified. The appropriate TTS voice is selected before each utterance. Requires the target language TTS data to be installed on the Android device (check Android Settings → TTS).
 
 #### `POST /api/volume`
 Set media volume (0-100).
@@ -771,7 +782,7 @@ rest_command:
     url: http://TABLET_IP:8080/api/tts
     method: POST
     content_type: "application/json"
-    payload: '{"text": "{{ message }}"}'
+    payload: '{"text": "{{ message }}", "language": "{{ language | default(\'\') }}"}'
   
   tablet_volume:
     url: http://TABLET_IP:8080/api/volume

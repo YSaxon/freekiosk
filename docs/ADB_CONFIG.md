@@ -73,6 +73,28 @@ adb shell am start -n com.freekiosk/.MainActivity [OPTIONS]
 | `--es lock_package "com.app"` | String | Package name of app to lock device to |
 | `--ez auto_start true` | Boolean | Auto-launch the locked app after config |
 
+### Multi-App Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `--es external_app_mode "multi"` | String | App mode: `single` (default, classic) or `multi` (home screen grid) |
+| `--es managed_apps '[...]'` | String (JSON) | JSON array of managed apps (see format below) |
+
+**Managed Apps JSON Format:**
+
+Each app in the array supports these fields:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `packageName` | String | **required** | Android package name |
+| `displayName` | String | auto-resolved | Display name (auto-detected from system if omitted) |
+| `showOnHomeScreen` | Boolean | `true` | Show in the multi-app home grid |
+| `launchOnBoot` | Boolean | `false` | Auto-launch on device boot |
+| `keepAlive` | Boolean | `false` | Monitor and restart if app crashes |
+| `allowAccessibility` | Boolean | `false` | Whitelist app's accessibility services |
+
+> **Note**: Uninstalled packages in the list are silently skipped with a warning in logcat.
+
 ### WebView Parameters
 
 | Parameter | Type | Description |
@@ -269,7 +291,24 @@ adb shell am start -n com.freekiosk/.MainActivity \
     --es status_bar "false"
 ```
 
-### 4. Full JSON Configuration
+### 4. Multi-App Kiosk
+
+Configure a home screen grid with multiple apps:
+
+```bash
+adb shell am start -n com.freekiosk/.MainActivity \
+    --es external_app_mode "multi" \
+    --es managed_apps '[{"packageName":"com.spotify.music"},{"packageName":"com.netflix.mediaclient"},{"packageName":"com.youtube","launchOnBoot":true,"keepAlive":true}]' \
+    --es pin "1234" \
+    --es test_mode "false"
+```
+
+> **Tip**: Display names are auto-resolved from the system. You can override them:
+> ```bash
+> --es managed_apps '[{"packageName":"com.app","displayName":"My Custom Name"}]'
+> ```
+
+### 5. Full JSON Configuration
 
 For complex setups, use a JSON config. Note that shell escaping can be tricky - using individual parameters is often easier:
 
@@ -289,7 +328,7 @@ adb shell am start -n com.freekiosk/.MainActivity \
     --es pin "1234"
 ```
 
-### 5. Modify Existing Configuration
+### 6. Modify Existing Configuration
 
 Change the locked app on an already-configured device:
 
@@ -311,6 +350,11 @@ When using `--es config '{...}'`, the following keys are supported:
   "url": "https://example.com",
   "lock_package": "com.example.app",
   "display_mode": "external_app",
+  "external_app_mode": "multi",
+  "managed_apps": [
+    {"packageName": "com.app1", "showOnHomeScreen": true},
+    {"packageName": "com.app2", "launchOnBoot": true, "keepAlive": true}
+  ],
   "kiosk_enabled": "true",
   "auto_launch": "true",
   "auto_relaunch": "true",

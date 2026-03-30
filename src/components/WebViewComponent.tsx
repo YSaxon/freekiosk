@@ -34,6 +34,7 @@ interface WebViewComponentProps {
   urlFilterPatterns?: string[]; // URL patterns to filter
   urlFilterShowFeedback?: boolean; // Show feedback when URL is blocked
   pdfViewerEnabled?: boolean; // Enable inline PDF viewing via PDF.js
+  printEnabled?: boolean; // Enable window.print() interception for native printing
   zoomLevel?: number; // Zoom level percentage (50-200, default 100)
   customUserAgent?: string; // Custom User-Agent string (empty = default modern Chrome UA)
 }
@@ -60,6 +61,7 @@ const WebViewComponent = forwardRef<WebViewComponentRef, WebViewComponentProps>(
   urlFilterPatterns,
   urlFilterShowFeedback = false,
   pdfViewerEnabled = false,
+  printEnabled = false,
   zoomLevel = 100,
   customUserAgent = ''
 }, ref) => {
@@ -254,13 +256,15 @@ const WebViewComponent = forwardRef<WebViewComponentRef, WebViewComponentProps>(
       console.error('[FreeKiosk] localStorage FAILED:', e);
     }
 
-    // Intercept window.print() to use native Android print
+    // Intercept window.print() to use native Android print (only when printing is enabled)
+    ${printEnabled ? `
     window.print = function() {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'PRINT_REQUEST',
         title: document.title || ''
       }));
     };
+    ` : '// Printing disabled - window.print() not intercepted'}
 
     // Throttling pour éviter le flood de messages (critique sur Fire OS)
     let lastInteraction = 0;
@@ -537,7 +541,7 @@ const WebViewComponent = forwardRef<WebViewComponentRef, WebViewComponentProps>(
 
             {/* Footer */}
             <Text style={styles.footerText}>
-              Version 1.2.17 • by Rushb
+              Version 1.2.18 • by Rushb
             </Text>
           </Animated.View>
         </ScrollView>
@@ -626,9 +630,19 @@ const WebViewComponent = forwardRef<WebViewComponentRef, WebViewComponentProps>(
           }
           
           if (urlLower.startsWith('file://') ||
-              urlLower.startsWith('javascript:') ||
-              urlLower.startsWith('data:')) {
+              urlLower.startsWith('javascript:')) {
             console.warn('[FreeKiosk] Blocked dangerous URL scheme:', request.url);
+            return false;
+          }
+          
+          // data: URLs - allow when printing is enabled (some label/receipt sites
+          // generate print content as data:text/html popups)
+          if (urlLower.startsWith('data:')) {
+            if (printEnabled) {
+              console.log('[FreeKiosk] Allowing data: URL (printing enabled)');
+              return true;
+            }
+            console.warn('[FreeKiosk] Blocked data: URL (printing disabled):', request.url.substring(0, 100));
             return false;
           }
 

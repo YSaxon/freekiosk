@@ -178,7 +178,13 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [urlFilterMode, setUrlFilterMode] = useState<string>('blacklist');
   const [urlFilterList, setUrlFilterList] = useState<string[]>([]);
   const [urlFilterShowFeedback, setUrlFilterShowFeedback] = useState<boolean>(false);
-  
+
+  // Lock Screen Controls states
+  const [lockscreenWifiEnabled, setLockscreenWifiEnabled] = useState<boolean>(false);
+  const [lockscreenBluetoothEnabled, setLockscreenBluetoothEnabled] = useState<boolean>(false);
+  const [lockscreenEmergencyCallEnabled, setLockscreenEmergencyCallEnabled] = useState<boolean>(false);
+  const [lockscreenSwipeDownEnabled, setLockscreenSwipeDownEnabled] = useState<boolean>(false);
+
   // PDF Viewer state
   const [pdfViewerEnabled, setPdfViewerEnabled] = useState<boolean>(false);
   
@@ -574,6 +580,16 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     setUrlFilterMode(savedUrlFilterMode);
     setUrlFilterList(savedUrlFilterList);
     setUrlFilterShowFeedback(savedUrlFilterShowFeedback);
+
+    // Lock Screen Controls settings
+    const savedLockscreenWifi = await StorageService.getLockscreenWifiEnabled();
+    const savedLockscreenBt = await StorageService.getLockscreenBluetoothEnabled();
+    const savedLockscreenEmergency = await StorageService.getLockscreenEmergencyCallEnabled();
+    const savedLockscreenSwipeDown = await StorageService.getLockscreenSwipeDownEnabled();
+    setLockscreenWifiEnabled(savedLockscreenWifi);
+    setLockscreenBluetoothEnabled(savedLockscreenBt);
+    setLockscreenEmergencyCallEnabled(savedLockscreenEmergency);
+    setLockscreenSwipeDownEnabled(savedLockscreenSwipeDown);
 
     // PDF Viewer setting
     const savedPdfViewerEnabled = await StorageService.getPdfViewerEnabled();
@@ -1234,6 +1250,12 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveUrlFilterList(urlFilterList);
     await StorageService.saveUrlFilterShowFeedback(urlFilterShowFeedback);
 
+    // Save Lock Screen Controls settings
+    await StorageService.saveLockscreenWifiEnabled(lockscreenWifiEnabled);
+    await StorageService.saveLockscreenBluetoothEnabled(lockscreenBluetoothEnabled);
+    await StorageService.saveLockscreenEmergencyCallEnabled(lockscreenEmergencyCallEnabled);
+    await StorageService.saveLockscreenSwipeDownEnabled(lockscreenSwipeDownEnabled);
+
     // Save PDF Viewer setting
     await StorageService.savePdfViewerEnabled(pdfViewerEnabled);
 
@@ -1779,9 +1801,17 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onUrlFilterListChange={setUrlFilterList}
             urlFilterShowFeedback={urlFilterShowFeedback}
             onUrlFilterShowFeedbackChange={setUrlFilterShowFeedback}
+            lockscreenWifiEnabled={lockscreenWifiEnabled}
+            onLockscreenWifiEnabledChange={setLockscreenWifiEnabled}
+            lockscreenBluetoothEnabled={lockscreenBluetoothEnabled}
+            onLockscreenBluetoothEnabledChange={setLockscreenBluetoothEnabled}
+            lockscreenEmergencyCallEnabled={lockscreenEmergencyCallEnabled}
+            onLockscreenEmergencyCallEnabledChange={setLockscreenEmergencyCallEnabled}
+            lockscreenSwipeDownEnabled={lockscreenSwipeDownEnabled}
+            onLockscreenSwipeDownEnabledChange={setLockscreenSwipeDownEnabled}
           />
         );
-      
+
       case 'advanced':
         return (
           <AdvancedTab

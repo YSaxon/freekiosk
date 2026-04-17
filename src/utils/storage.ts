@@ -144,6 +144,11 @@ const KEYS = {
   // Dashboard
   DASHBOARD_MODE_ENABLED: '@kiosk_dashboard_mode_enabled',
   DASHBOARD_TILES: '@kiosk_dashboard_tiles',
+  // Lock Screen Controls
+  LOCKSCREEN_WIFI_ENABLED: '@kiosk_lockscreen_wifi_enabled',
+  LOCKSCREEN_BLUETOOTH_ENABLED: '@kiosk_lockscreen_bluetooth_enabled',
+  LOCKSCREEN_EMERGENCY_CALL_ENABLED: '@kiosk_lockscreen_emergency_call_enabled',
+  LOCKSCREEN_SWIPE_DOWN_ENABLED: '@kiosk_lockscreen_swipe_down_enabled',
 };
 
 export const StorageService = {
@@ -2416,5 +2421,79 @@ export const StorageService = {
 
   /** Expose KEYS for external multiGet consumers */
   KEYS,
+
+  // ============ LOCK SCREEN CONTROLS ============
+
+  saveLockscreenWifiEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_WIFI_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen wifi enabled:', error);
+    }
+  },
+
+  getLockscreenWifiEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_WIFI_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen wifi enabled:', error);
+      return false;
+    }
+  },
+
+  saveLockscreenBluetoothEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_BLUETOOTH_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen bluetooth enabled:', error);
+    }
+  },
+
+  getLockscreenBluetoothEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_BLUETOOTH_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen bluetooth enabled:', error);
+      return false;
+    }
+  },
+
+  saveLockscreenEmergencyCallEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_EMERGENCY_CALL_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen emergency call enabled:', error);
+    }
+  },
+
+  getLockscreenEmergencyCallEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_EMERGENCY_CALL_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen emergency call enabled:', error);
+      return false;
+    }
+  },
+
+  saveLockscreenSwipeDownEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_SWIPE_DOWN_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen swipe-down enabled:', error);
+    }
+  },
+
+  getLockscreenSwipeDownEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_SWIPE_DOWN_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen swipe-down enabled:', error);
+      return false;
+    }
+  },
 
 };

@@ -28,6 +28,7 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import Icon from '../components/Icon';
 import { revokeSettingsAccess } from '../utils/authState';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import LockscreenQuickPanel from '../components/LockscreenQuickPanel';
 
 const { HttpServerModule } = NativeModules;
 
@@ -181,6 +182,11 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [printEnabled, setPrintEnabled] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [customUserAgent, setCustomUserAgent] = useState<string>('');
+
+  // Lock screen quick panel (swipe-down WiFi/BT access)
+  const [lockscreenSwipeDownEnabled, setLockscreenSwipeDownEnabled] = useState<boolean>(false);
+  const [lockscreenSwipeDownWifi, setLockscreenSwipeDownWifi] = useState<boolean>(false);
+  const [lockscreenSwipeDownBt, setLockscreenSwipeDownBt] = useState<boolean>(false);
 
   // Media Player states
   const [mediaPlayerItems, setMediaPlayerItems] = useState<MediaItem[]>([]);
@@ -1467,6 +1473,14 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       setUrlFilterList(savedUrlFilterList);
       setUrlFilterShowFeedback(savedUrlFilterShowFeedback);
       
+      // Load Lock Screen Quick Panel settings
+      const savedSwipeDownEnabled = bool(K.LOCKSCREEN_SWIPE_DOWN_ENABLED, false);
+      const savedSwipeDownWifi = bool(K.LOCKSCREEN_WIFI_ENABLED, false);
+      const savedSwipeDownBt = bool(K.LOCKSCREEN_BLUETOOTH_ENABLED, false);
+      setLockscreenSwipeDownEnabled(savedSwipeDownEnabled);
+      setLockscreenSwipeDownWifi(savedSwipeDownWifi);
+      setLockscreenSwipeDownBt(savedSwipeDownBt);
+
       // Load PDF Viewer setting
       const savedPdfViewerEnabled = bool(K.PDF_VIEWER_ENABLED, false);
       setPdfViewerEnabled(savedPdfViewerEnabled);
@@ -2350,6 +2364,14 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
           style={[styles.screensaverOverlay, styles.screensaverBlack]}
           activeOpacity={1}
           onPress={screenSchedulerWakeOnTouch ? onScreensaverTap : undefined}
+        />
+      )}
+
+      {/* Swipe-down quick panel for WiFi / Bluetooth — only when enabled in settings */}
+      {lockscreenSwipeDownEnabled && (lockscreenSwipeDownWifi || lockscreenSwipeDownBt) && (
+        <LockscreenQuickPanel
+          showWifi={lockscreenSwipeDownWifi}
+          showBluetooth={lockscreenSwipeDownBt}
         />
       )}
     </View>

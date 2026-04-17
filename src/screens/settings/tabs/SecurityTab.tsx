@@ -84,6 +84,8 @@ interface SecurityTabProps {
   onLockscreenEmergencyCallEnabledChange: (value: boolean) => void;
   lockscreenSwipeDownEnabled: boolean;
   onLockscreenSwipeDownEnabledChange: (value: boolean) => void;
+  lockscreenAudioEnabled: boolean;
+  onLockscreenAudioEnabledChange: (value: boolean) => void;
 }
 
 const SecurityTab: React.FC<SecurityTabProps> = ({
@@ -135,6 +137,8 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onLockscreenEmergencyCallEnabledChange,
   lockscreenSwipeDownEnabled,
   onLockscreenSwipeDownEnabledChange,
+  lockscreenAudioEnabled,
+  onLockscreenAudioEnabledChange,
 }) => {
   return (
     <View>
@@ -541,16 +545,24 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
           onValueChange={onLockscreenEmergencyCallEnabledChange}
         />
         <View style={styles.divider} />
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="🔊 Audio controls on lock screen"
+          hint="Show volume, mute, and audio output selector in the swipe-down panel and on the PIN screen."
+          value={lockscreenAudioEnabled}
+          onValueChange={onLockscreenAudioEnabledChange}
+        />
+        <View style={styles.divider} />
         <SettingsSwitch
           label="⬇️ Swipe-down quick panel"
-          hint="Show a thin drag handle at the very top of the kiosk screen. Pulling it down reveals WiFi and Bluetooth controls without requiring 5 taps or a PIN."
+          hint="Show a thin drag handle at the very top of the kiosk screen. Pulling it down reveals the enabled controls without requiring 5 taps or a PIN."
           value={lockscreenSwipeDownEnabled}
           onValueChange={onLockscreenSwipeDownEnabledChange}
         />
-        {lockscreenSwipeDownEnabled && !lockscreenWifiEnabled && !lockscreenBluetoothEnabled && (
+        {lockscreenSwipeDownEnabled && !lockscreenWifiEnabled && !lockscreenBluetoothEnabled && !lockscreenAudioEnabled && (
           <SettingsInfoBox variant="warning">
             <Text style={styles.infoText}>
-              ⚠️ Enable WiFi and/or Bluetooth control above to have something to show in the swipe-down panel.
+              ⚠️ Enable at least one control above to have something to show in the swipe-down panel.
             </Text>
           </SettingsInfoBox>
         )}

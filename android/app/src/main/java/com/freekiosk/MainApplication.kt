@@ -35,6 +35,7 @@ class MainApplication : Application(), ReactApplication {
           add(FilePickerPackage())
           add(WifiControlPackage())
           add(BluetoothControlPackage())
+          add(AudioControlPackage())
         },
     )
   }

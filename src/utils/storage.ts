@@ -149,6 +149,7 @@ const KEYS = {
   LOCKSCREEN_BLUETOOTH_ENABLED: '@kiosk_lockscreen_bluetooth_enabled',
   LOCKSCREEN_EMERGENCY_CALL_ENABLED: '@kiosk_lockscreen_emergency_call_enabled',
   LOCKSCREEN_SWIPE_DOWN_ENABLED: '@kiosk_lockscreen_swipe_down_enabled',
+  LOCKSCREEN_AUDIO_ENABLED: '@kiosk_lockscreen_audio_enabled',
 };
 
 export const StorageService = {
@@ -2492,6 +2493,24 @@ export const StorageService = {
       return value ? JSON.parse(value) : false;
     } catch (error) {
       console.error('Error getting lockscreen swipe-down enabled:', error);
+      return false;
+    }
+  },
+
+  saveLockscreenAudioEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_AUDIO_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen audio enabled:', error);
+    }
+  },
+
+  getLockscreenAudioEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_AUDIO_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen audio enabled:', error);
       return false;
     }
   },

@@ -184,6 +184,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [lockscreenBluetoothEnabled, setLockscreenBluetoothEnabled] = useState<boolean>(false);
   const [lockscreenEmergencyCallEnabled, setLockscreenEmergencyCallEnabled] = useState<boolean>(false);
   const [lockscreenSwipeDownEnabled, setLockscreenSwipeDownEnabled] = useState<boolean>(false);
+  const [lockscreenAudioEnabled, setLockscreenAudioEnabled] = useState<boolean>(false);
 
   // PDF Viewer state
   const [pdfViewerEnabled, setPdfViewerEnabled] = useState<boolean>(false);
@@ -586,10 +587,12 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const savedLockscreenBt = await StorageService.getLockscreenBluetoothEnabled();
     const savedLockscreenEmergency = await StorageService.getLockscreenEmergencyCallEnabled();
     const savedLockscreenSwipeDown = await StorageService.getLockscreenSwipeDownEnabled();
+    const savedLockscreenAudio = await StorageService.getLockscreenAudioEnabled();
     setLockscreenWifiEnabled(savedLockscreenWifi);
     setLockscreenBluetoothEnabled(savedLockscreenBt);
     setLockscreenEmergencyCallEnabled(savedLockscreenEmergency);
     setLockscreenSwipeDownEnabled(savedLockscreenSwipeDown);
+    setLockscreenAudioEnabled(savedLockscreenAudio);
 
     // PDF Viewer setting
     const savedPdfViewerEnabled = await StorageService.getPdfViewerEnabled();
@@ -1255,6 +1258,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveLockscreenBluetoothEnabled(lockscreenBluetoothEnabled);
     await StorageService.saveLockscreenEmergencyCallEnabled(lockscreenEmergencyCallEnabled);
     await StorageService.saveLockscreenSwipeDownEnabled(lockscreenSwipeDownEnabled);
+    await StorageService.saveLockscreenAudioEnabled(lockscreenAudioEnabled);
 
     // Save PDF Viewer setting
     await StorageService.savePdfViewerEnabled(pdfViewerEnabled);
@@ -1809,6 +1813,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onLockscreenEmergencyCallEnabledChange={setLockscreenEmergencyCallEnabled}
             lockscreenSwipeDownEnabled={lockscreenSwipeDownEnabled}
             onLockscreenSwipeDownEnabledChange={setLockscreenSwipeDownEnabled}
+            lockscreenAudioEnabled={lockscreenAudioEnabled}
+            onLockscreenAudioEnabledChange={setLockscreenAudioEnabled}
           />
         );
 

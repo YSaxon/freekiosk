@@ -183,10 +183,11 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [customUserAgent, setCustomUserAgent] = useState<string>('');
 
-  // Lock screen quick panel (swipe-down WiFi/BT access)
+  // Lock screen quick panel (swipe-down WiFi/BT/audio access)
   const [lockscreenSwipeDownEnabled, setLockscreenSwipeDownEnabled] = useState<boolean>(false);
   const [lockscreenSwipeDownWifi, setLockscreenSwipeDownWifi] = useState<boolean>(false);
   const [lockscreenSwipeDownBt, setLockscreenSwipeDownBt] = useState<boolean>(false);
+  const [lockscreenSwipeDownAudio, setLockscreenSwipeDownAudio] = useState<boolean>(false);
 
   // Media Player states
   const [mediaPlayerItems, setMediaPlayerItems] = useState<MediaItem[]>([]);
@@ -1477,9 +1478,11 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       const savedSwipeDownEnabled = bool(K.LOCKSCREEN_SWIPE_DOWN_ENABLED, false);
       const savedSwipeDownWifi = bool(K.LOCKSCREEN_WIFI_ENABLED, false);
       const savedSwipeDownBt = bool(K.LOCKSCREEN_BLUETOOTH_ENABLED, false);
+      const savedSwipeDownAudio = bool(K.LOCKSCREEN_AUDIO_ENABLED, false);
       setLockscreenSwipeDownEnabled(savedSwipeDownEnabled);
       setLockscreenSwipeDownWifi(savedSwipeDownWifi);
       setLockscreenSwipeDownBt(savedSwipeDownBt);
+      setLockscreenSwipeDownAudio(savedSwipeDownAudio);
 
       // Load PDF Viewer setting
       const savedPdfViewerEnabled = bool(K.PDF_VIEWER_ENABLED, false);
@@ -2368,10 +2371,11 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       )}
 
       {/* Swipe-down quick panel for WiFi / Bluetooth — only when enabled in settings */}
-      {lockscreenSwipeDownEnabled && (lockscreenSwipeDownWifi || lockscreenSwipeDownBt) && (
+      {lockscreenSwipeDownEnabled && (lockscreenSwipeDownWifi || lockscreenSwipeDownBt || lockscreenSwipeDownAudio) && (
         <LockscreenQuickPanel
           showWifi={lockscreenSwipeDownWifi}
           showBluetooth={lockscreenSwipeDownBt}
+          showAudio={lockscreenSwipeDownAudio}
         />
       )}
     </View>

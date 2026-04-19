@@ -14,6 +14,8 @@ import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
@@ -29,6 +31,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
     private var scanReceiver: BroadcastReceiver? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
     override fun getName(): String = "WifiControlModule"
 
     override fun onCatalystInstanceDestroy() {
@@ -146,13 +149,20 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
                 return
             }
 
+            val missing = missingScanPermissions()
+            if (missing.isNotEmpty()) {
+                promise.reject(
+                    "SCAN_PERMISSION_MISSING",
+                    "Missing permissions for WiFi scan results: ${missing.joinToString(", ")}"
+                )
+                return
+            }
+
             unregisterScanReceiver()
 
             scanReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
-                    unregisterScanReceiver()
-                    val results = buildScanResults(wifiManager)
-                    sendEvent("wifiScanResults", results)
+                    emitScanResults(wifiManager)
                 }
             }
 
@@ -163,6 +173,15 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
 
             @Suppress("DEPRECATION")
             val started = wifiManager.startScan()
+            if (!started) {
+                emitScanResults(wifiManager)
+            } else {
+                mainHandler.postDelayed({
+                    if (scanReceiver != null) {
+                        emitScanResults(wifiManager)
+                    }
+                }, 3000)
+            }
             promise.resolve(started)
         } catch (e: Exception) {
             promise.reject("SCAN_ERROR", e.message, e)
@@ -174,19 +193,42 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         try {
             val wifiManager = reactContext.applicationContext
                 .getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val missing = missingScanPermissions()
+            if (missing.isNotEmpty()) {
+                promise.reject(
+                    "SCAN_PERMISSION_MISSING",
+                    "Missing permissions for WiFi scan results: ${missing.joinToString(", ")}"
+                )
+                return
+            }
             promise.resolve(buildScanResults(wifiManager))
         } catch (e: Exception) {
             promise.reject("SCAN_RESULTS_ERROR", e.message, e)
         }
     }
 
+    private fun missingScanPermissions(): List<String> {
+        val missing = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(reactContext, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(reactContext, Manifest.permission.NEARBY_WIFI_DEVICES)
+            != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+        }
+        return missing
+    }
+
+    private fun emitScanResults(wifiManager: WifiManager) {
+        unregisterScanReceiver()
+        sendEvent("wifiScanResults", buildScanResults(wifiManager))
+    }
+
     private fun buildScanResults(wifiManager: WifiManager): WritableArray {
         val arr = Arguments.createArray()
-        val hasLocation = ContextCompat.checkSelfPermission(
-            reactContext, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (!hasLocation) return arr
+        if (missingScanPermissions().isNotEmpty()) return arr
 
         val seen = mutableSetOf<String>()
         val raw: List<ScanResult> = try {
@@ -207,7 +249,8 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
             net.putInt("signalLevel", WifiManager.calculateSignalLevel(sr.level, 5))
             net.putInt("rssi", sr.level)
             val secured = sr.capabilities?.let {
-                it.contains("WPA") || it.contains("WEP") || it.contains("PSK")
+                it.contains("WPA") || it.contains("WEP") || it.contains("PSK") ||
+                    it.contains("SAE") || it.contains("EAP")
             } ?: false
             net.putBoolean("secured", secured)
             net.putString("capabilities", sr.capabilities ?: "")

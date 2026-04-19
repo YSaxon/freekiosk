@@ -111,13 +111,19 @@ export default function WifiDialog({ visible, onClose }: Props) {
     setScanning(true);
     setNetworks([]);
     try {
-      await WifiControlModule.startScan();
+      const started = await WifiControlModule.startScan();
+      if (!started) {
+        const cachedResults: WifiNetwork[] = await WifiControlModule.getScanResults();
+        setNetworks(cachedResults);
+        setScanning(false);
+      }
       // Results arrive via 'wifiScanResults' event
       // Safety timeout in case the event never fires
       setTimeout(() => setScanning(false), 12000);
-    } catch (e) {
+    } catch (e: any) {
       setScanning(false);
       console.warn('[WifiDialog] scan error:', e);
+      Alert.alert('Wi-Fi scan unavailable', e?.message || 'FreeKiosk does not have permission to scan for Wi-Fi networks.');
     }
   };
 

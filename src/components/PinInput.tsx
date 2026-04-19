@@ -7,12 +7,15 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Linking,
+  NativeModules,
 } from 'react-native';
 import { verifySecurePin, getLockoutStatus, hasSecurePin } from '../utils/secureStorage';
 import { StorageService } from '../utils/storage';
 import WifiDialog from './WifiDialog';
 import BluetoothDialog from './BluetoothDialog';
+import LockscreenQuickPanel from './LockscreenQuickPanel';
+
+const { KioskModule } = NativeModules;
 
 interface PinInputProps {
   onSuccess: () => void;
@@ -32,6 +35,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   // Lock screen controls visibility
   const [showWifiButton, setShowWifiButton] = useState(false);
   const [showBluetoothButton, setShowBluetoothButton] = useState(false);
+  const [showAudioControls, setShowAudioControls] = useState(false);
   const [showEmergencyButton, setShowEmergencyButton] = useState(false);
 
   // Dialog visibility
@@ -50,13 +54,15 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   }, []);
 
   const loadLockscreenSettings = async (): Promise<void> => {
-    const [wifi, bt, emergency] = await Promise.all([
+    const [wifi, bt, audio, emergency] = await Promise.all([
       StorageService.getLockscreenWifiEnabled(),
       StorageService.getLockscreenBluetoothEnabled(),
+      StorageService.getLockscreenAudioEnabled(),
       StorageService.getLockscreenEmergencyCallEnabled(),
     ]);
     setShowWifiButton(wifi);
     setShowBluetoothButton(bt);
+    setShowAudioControls(audio);
     setShowEmergencyButton(emergency);
   };
 
@@ -136,19 +142,13 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
     }
   };
 
-  const handleEmergencyCall = (): void => {
-    // Open the dialer pre-filled with the emergency number.
-    // tel: scheme is allowed even in restricted environments; the user still
-    // has to press "Call" in the dialer — nothing auto-dials.
-    Linking.openURL('tel:112').catch(() => {
-      // Some devices prefer 911; try that as a fallback
-      Linking.openURL('tel:911').catch(() => {
-        Alert.alert(
-          'Emergency Call',
-          'Please dial your local emergency number (112 / 911) manually.'
-        );
-      });
-    });
+  const handleEmergencyCall = async (): Promise<void> => {
+    try {
+      await KioskModule.launchEmergencyDial();
+    } catch (e) {
+      console.warn('[PinInput] launchEmergencyDial error:', e);
+      Alert.alert('Emergency Call', 'Unable to open the emergency dialer.');
+    }
   };
 
   const formatTime = (milliseconds: number): string => {
@@ -266,6 +266,12 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
       <BluetoothDialog
         visible={bluetoothDialogVisible}
         onClose={() => setBluetoothDialogVisible(false)}
+      />
+      <LockscreenQuickPanel
+        showWifi={false}
+        showBluetooth={false}
+        showAudio={showAudioControls}
+        showEmergency={false}
       />
     </View>
   );

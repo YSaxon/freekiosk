@@ -216,6 +216,18 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                             dpm.setLockTaskPackages(adminComponent, uniqueWhitelist.toTypedArray())
                             activity.startLockTask()
                             android.util.Log.d("KioskModule", "Full lock task started (Device Owner) with whitelist: $uniqueWhitelist")
+
+                            // Enable the HOME alias so subsequent reboots bypass the stock launcher
+                            try {
+                                reactApplicationContext.packageManager.setComponentEnabledSetting(
+                                    ComponentName(reactApplicationContext.packageName, "${reactApplicationContext.packageName}.KioskHomeAlias"),
+                                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                                    PackageManager.DONT_KILL_APP
+                                )
+                                android.util.Log.d("KioskModule", "KioskHomeAlias enabled")
+                            } catch (e: Exception) {
+                                android.util.Log.w("KioskModule", "Could not enable KioskHomeAlias: ${e.message}")
+                            }
                             
                             // Safety net: force unmute audio streams after entering lock task
                             // Samsung/OneUI devices may mute audio in LOCK_TASK_MODE_LOCKED
@@ -262,6 +274,19 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                     try {
                         activity.stopLockTask()
                         android.util.Log.d("KioskModule", "Lock task stopped")
+
+                        // Disable the HOME alias so the stock launcher is restored
+                        try {
+                            reactApplicationContext.packageManager.setComponentEnabledSetting(
+                                ComponentName(reactApplicationContext.packageName, "${reactApplicationContext.packageName}.KioskHomeAlias"),
+                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                                PackageManager.DONT_KILL_APP
+                            )
+                            android.util.Log.d("KioskModule", "KioskHomeAlias disabled")
+                        } catch (e: Exception) {
+                            android.util.Log.w("KioskModule", "Could not disable KioskHomeAlias: ${e.message}")
+                        }
+
                         promise.resolve(true)
                     } catch (e: Exception) {
                         promise.reject("ERROR", "Failed to stop lock task: ${e.message}")

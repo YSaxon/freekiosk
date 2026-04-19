@@ -98,6 +98,22 @@
         android:resizeableActivity="false"
         android:supportsPictureInPicture="false" />
 
+      <!-- KioskHomeAlias - Routes the HOME intent directly to BootLockActivity when kiosk
+           is active, closing the window where the stock launcher would briefly appear at boot.
+           Enabled/disabled by KioskModule.startLockTask() / stopLockTask(). -->
+      <activity-alias
+        android:name=".KioskHomeAlias"
+        android:targetActivity=".BootLockActivity"
+        android:enabled="false"
+        android:exported="true"
+        android:directBootAware="true">
+        <intent-filter android:priority="1000">
+          <action android:name="android.intent.action.MAIN" />
+          <category android:name="android.intent.category.HOME" />
+          <category android:name="android.intent.category.DEFAULT" />
+        </intent-filter>
+      </activity-alias>
+
       <!-- MainActivity - Interface React Native principale -->
       <activity
         android:name=".MainActivity"

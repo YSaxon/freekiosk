@@ -74,6 +74,16 @@ class BootLockActivity : Activity() {
 
         DebugLog.d(TAG, "onCreate — attempting immediate lock-task")
 
+        // If kiosk is disabled (e.g., launched as HOME but admin turned kiosk off),
+        // skip lock-task and just launch the kiosk app normally.
+        val kioskEnabled = readAsyncStorageValue("@kiosk_enabled", "false") == "true"
+        if (!kioskEnabled) {
+            DebugLog.d(TAG, "Kiosk disabled — launching MainActivity without lock-task")
+            launchMainActivity()
+            finish()
+            return
+        }
+
         // Enter lock-task mode right away (Device Owner path)
         enterLockTaskIfDeviceOwner()
 
@@ -123,6 +133,18 @@ class BootLockActivity : Activity() {
 
             startLockTask()
             DebugLog.d(TAG, "Lock-task started with whitelist: ${unique.toList()}")
+
+            // Ensure the HOME alias is enabled so this path is used on subsequent reboots too
+            try {
+                packageManager.setComponentEnabledSetting(
+                    android.content.ComponentName(packageName, "$packageName.KioskHomeAlias"),
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    android.content.pm.PackageManager.DONT_KILL_APP
+                )
+                DebugLog.d(TAG, "KioskHomeAlias enabled")
+            } catch (e: Exception) {
+                DebugLog.d(TAG, "Could not enable KioskHomeAlias: ${e.message}")
+            }
         } catch (e: Exception) {
             DebugLog.errorProduction(TAG, "Failed to enter lock-task: ${e.message}")
         }

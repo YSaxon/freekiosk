@@ -43,6 +43,7 @@
 
     <!-- WiFi control (lock screen WiFi management) -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
         tools:targetApi="tiramisu" />
     <!-- Bluetooth control (lock screen BT management) -->
@@ -58,6 +59,9 @@
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL_EMERGENCY" />
         </intent>
     </queries>
 

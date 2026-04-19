@@ -9,9 +9,11 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
+import android.net.wifi.WifiNetworkSpecifier
 import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
 import android.os.Handler
@@ -31,11 +33,13 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
     private var scanReceiver: BroadcastReceiver? = null
+    private var activeNetworkCallback: ConnectivityManager.NetworkCallback? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     override fun getName(): String = "WifiControlModule"
 
     override fun onCatalystInstanceDestroy() {
         unregisterScanReceiver()
+        releaseActiveNetworkRequest()
     }
 
     // ─── State ────────────────────────────────────────────────────────────────
@@ -282,6 +286,8 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
     private fun connectApi29(ssid: String, password: String, promise: Promise) {
         val wifiManager = reactContext.applicationContext
             .getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val connectivityManager = reactContext.applicationContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
         val suggestionBuilder = WifiNetworkSuggestion.Builder().setSsid(ssid)
         if (password.isNotEmpty()) {
@@ -293,16 +299,67 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         wifiManager.removeNetworkSuggestions(listOf(suggestion))
         val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
 
-        if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS ||
-            status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE) {
-            // Trigger a scan so the system finds and connects to the network quickly
-            wifiManager.startScan()
-            val result = Arguments.createMap()
-            result.putBoolean("success", true)
-            result.putString("ssid", ssid)
-            promise.resolve(result)
-        } else {
+        if (status != WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS &&
+            status != WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE) {
             promise.reject("CONNECT_ERROR", "addNetworkSuggestions failed: status=$status")
+            return
+        }
+
+        releaseActiveNetworkRequest(connectivityManager)
+
+        val specifierBuilder = WifiNetworkSpecifier.Builder().setSsid(ssid)
+        if (password.isNotEmpty()) {
+            specifierBuilder.setWpa2Passphrase(password)
+        }
+
+        val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .setNetworkSpecifier(specifierBuilder.build())
+            .build()
+
+        var settled = false
+        val timeout = Runnable {
+            if (settled) return@Runnable
+            settled = true
+            releaseActiveNetworkRequest(connectivityManager)
+            promise.reject(
+                "CONNECT_TIMEOUT",
+                "Android did not connect to \"$ssid\". Check the password or approve the WiFi connection prompt."
+            )
+        }
+
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                if (settled) return
+                settled = true
+                mainHandler.removeCallbacks(timeout)
+                connectivityManager.bindProcessToNetwork(network)
+                val result = Arguments.createMap()
+                result.putBoolean("success", true)
+                result.putString("ssid", ssid)
+                result.putBoolean("processBound", true)
+                promise.resolve(result)
+            }
+
+            override fun onUnavailable() {
+                if (settled) return
+                settled = true
+                mainHandler.removeCallbacks(timeout)
+                releaseActiveNetworkRequest(connectivityManager)
+                promise.reject("CONNECT_UNAVAILABLE", "Android could not connect to \"$ssid\"")
+            }
+        }
+
+        activeNetworkCallback = callback
+        mainHandler.postDelayed(timeout, 30000)
+        try {
+            @Suppress("DEPRECATION")
+            wifiManager.startScan()
+            connectivityManager.requestNetwork(request, callback)
+        } catch (e: Exception) {
+            mainHandler.removeCallbacks(timeout)
+            releaseActiveNetworkRequest(connectivityManager)
+            promise.reject("CONNECT_REQUEST_ERROR", e.message, e)
         }
     }
 
@@ -355,6 +412,17 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
             try { reactContext.unregisterReceiver(it) } catch (_: Exception) {}
             scanReceiver = null
         }
+    }
+
+    private fun releaseActiveNetworkRequest(
+        connectivityManager: ConnectivityManager? = reactContext.applicationContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    ) {
+        activeNetworkCallback?.let { callback ->
+            try { connectivityManager?.unregisterNetworkCallback(callback) } catch (_: Exception) {}
+            activeNetworkCallback = null
+        }
+        try { connectivityManager?.bindProcessToNetwork(null) } catch (_: Exception) {}
     }
 
     // Required for addListener / removeListeners to suppress RN warnings

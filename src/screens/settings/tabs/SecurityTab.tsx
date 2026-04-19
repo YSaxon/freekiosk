@@ -74,6 +74,18 @@ interface SecurityTabProps {
   onUrlFilterListChange: (patterns: string[]) => void;
   urlFilterShowFeedback: boolean;
   onUrlFilterShowFeedbackChange: (value: boolean) => void;
+
+  // Lock Screen Controls
+  lockscreenWifiEnabled: boolean;
+  onLockscreenWifiEnabledChange: (value: boolean) => void;
+  lockscreenBluetoothEnabled: boolean;
+  onLockscreenBluetoothEnabledChange: (value: boolean) => void;
+  lockscreenEmergencyCallEnabled: boolean;
+  onLockscreenEmergencyCallEnabledChange: (value: boolean) => void;
+  lockscreenSwipeDownEnabled: boolean;
+  onLockscreenSwipeDownEnabledChange: (value: boolean) => void;
+  lockscreenAudioEnabled: boolean;
+  onLockscreenAudioEnabledChange: (value: boolean) => void;
 }
 
 const SecurityTab: React.FC<SecurityTabProps> = ({
@@ -117,6 +129,16 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onUrlFilterListChange,
   urlFilterShowFeedback,
   onUrlFilterShowFeedbackChange,
+  lockscreenWifiEnabled,
+  onLockscreenWifiEnabledChange,
+  lockscreenBluetoothEnabled,
+  onLockscreenBluetoothEnabledChange,
+  lockscreenEmergencyCallEnabled,
+  onLockscreenEmergencyCallEnabledChange,
+  lockscreenSwipeDownEnabled,
+  onLockscreenSwipeDownEnabledChange,
+  lockscreenAudioEnabled,
+  onLockscreenAudioEnabledChange,
 }) => {
   return (
     <View>
@@ -493,6 +515,59 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
         </>
       )}
       
+      {/* Lock Screen Controls */}
+      <SettingsSection title="Lock Screen Controls" icon="cellphone-lock">
+        <SettingsInfoBox variant="info">
+          <Text style={styles.infoText}>
+            ℹ️ These controls appear on the PIN entry screen (and optionally via a swipe-down panel
+            directly on the kiosk screen) without giving access to Settings or other apps.
+          </Text>
+        </SettingsInfoBox>
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="📶 WiFi control on lock screen"
+          hint="Show a WiFi button on the PIN entry screen. Users can turn WiFi on/off and connect to networks without unlocking."
+          value={lockscreenWifiEnabled}
+          onValueChange={onLockscreenWifiEnabledChange}
+        />
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="🔵 Bluetooth control on lock screen"
+          hint="Show a Bluetooth button on the PIN entry screen. Users can toggle Bluetooth and pair devices without unlocking."
+          value={lockscreenBluetoothEnabled}
+          onValueChange={onLockscreenBluetoothEnabledChange}
+        />
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="🆘 Emergency call button"
+          hint="Show an emergency call button on the PIN entry screen. Opens the phone dialer pre-filled with 112/911."
+          value={lockscreenEmergencyCallEnabled}
+          onValueChange={onLockscreenEmergencyCallEnabledChange}
+        />
+        <View style={styles.divider} />
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="🔊 Audio controls on lock screen"
+          hint="Show volume, mute, and audio output selector in the swipe-down panel and on the PIN screen."
+          value={lockscreenAudioEnabled}
+          onValueChange={onLockscreenAudioEnabledChange}
+        />
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="⬇️ Swipe-down quick panel"
+          hint="Show a thin drag handle at the very top of the kiosk screen. Pulling it down reveals the enabled controls without requiring 5 taps or a PIN."
+          value={lockscreenSwipeDownEnabled}
+          onValueChange={onLockscreenSwipeDownEnabledChange}
+        />
+        {lockscreenSwipeDownEnabled && !lockscreenWifiEnabled && !lockscreenBluetoothEnabled && !lockscreenAudioEnabled && (
+          <SettingsInfoBox variant="warning">
+            <Text style={styles.infoText}>
+              ⚠️ Enable at least one control above to have something to show in the swipe-down panel.
+            </Text>
+          </SettingsInfoBox>
+        )}
+      </SettingsSection>
+
       {/* Return Mechanism Info - Always visible */}
       <SettingsSection variant="info">
         <Text style={styles.infoTitle}>ℹ️ Return to Settings</Text>

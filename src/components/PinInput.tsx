@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  Linking,
+} from 'react-native';
 import { verifySecurePin, getLockoutStatus, hasSecurePin } from '../utils/secureStorage';
 import { StorageService } from '../utils/storage';
+import WifiDialog from './WifiDialog';
+import BluetoothDialog from './BluetoothDialog';
 
 interface PinInputProps {
   onSuccess: () => void;
@@ -18,20 +29,38 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   const [pinMode, setPinMode] = useState<'numeric' | 'alphanumeric'>('numeric');
   const inputRef = useRef<TextInput>(null);
 
+  // Lock screen controls visibility
+  const [showWifiButton, setShowWifiButton] = useState(false);
+  const [showBluetoothButton, setShowBluetoothButton] = useState(false);
+  const [showEmergencyButton, setShowEmergencyButton] = useState(false);
+
+  // Dialog visibility
+  const [wifiDialogVisible, setWifiDialogVisible] = useState(false);
+  const [bluetoothDialogVisible, setBluetoothDialogVisible] = useState(false);
+
   useEffect(() => {
     checkLockoutStatus();
     checkPinConfiguration();
     loadPinMode();
+    loadLockscreenSettings();
     const interval = setInterval(checkLockoutStatus, 1000);
     return () => {
       clearInterval(interval);
     };
   }, []);
 
-  // Simple and reliable PIN change handler
-  // Uses native secureTextEntry for masking - no manual bullet management
+  const loadLockscreenSettings = async (): Promise<void> => {
+    const [wifi, bt, emergency] = await Promise.all([
+      StorageService.getLockscreenWifiEnabled(),
+      StorageService.getLockscreenBluetoothEnabled(),
+      StorageService.getLockscreenEmergencyCallEnabled(),
+    ]);
+    setShowWifiButton(wifi);
+    setShowBluetoothButton(bt);
+    setShowEmergencyButton(emergency);
+  };
+
   const handlePinChange = (text: string): void => {
-    // For numeric mode, filter out non-numeric characters
     if (pinMode === 'numeric') {
       const filtered = text.replace(/[^0-9]/g, '');
       setPin(filtered);
@@ -107,11 +136,28 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
     }
   };
 
+  const handleEmergencyCall = (): void => {
+    // Open the dialer pre-filled with the emergency number.
+    // tel: scheme is allowed even in restricted environments; the user still
+    // has to press "Call" in the dialer — nothing auto-dials.
+    Linking.openURL('tel:112').catch(() => {
+      // Some devices prefer 911; try that as a fallback
+      Linking.openURL('tel:911').catch(() => {
+        Alert.alert(
+          'Emergency Call',
+          'Please dial your local emergency number (112 / 911) manually.'
+        );
+      });
+    });
+  };
+
   const formatTime = (milliseconds: number): string => {
     const minutes = Math.floor(milliseconds / 60000);
     const seconds = Math.floor((milliseconds % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
+
+  const hasQuickControls = showWifiButton || showBluetoothButton || showEmergencyButton;
 
   return (
     <View style={styles.container}>
@@ -176,6 +222,51 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
           </TouchableOpacity>
         </>
       )}
+
+      {/* Quick controls row — only shown when at least one is enabled in settings */}
+      {hasQuickControls && (
+        <View style={styles.quickControls}>
+          {showWifiButton && (
+            <TouchableOpacity
+              style={styles.quickBtn}
+              onPress={() => setWifiDialogVisible(true)}
+            >
+              <Text style={styles.quickBtnIcon}>📶</Text>
+              <Text style={styles.quickBtnLabel}>Wi-Fi</Text>
+            </TouchableOpacity>
+          )}
+
+          {showBluetoothButton && (
+            <TouchableOpacity
+              style={styles.quickBtn}
+              onPress={() => setBluetoothDialogVisible(true)}
+            >
+              <Text style={styles.quickBtnIcon}>🔵</Text>
+              <Text style={styles.quickBtnLabel}>Bluetooth</Text>
+            </TouchableOpacity>
+          )}
+
+          {showEmergencyButton && (
+            <TouchableOpacity
+              style={[styles.quickBtn, styles.emergencyBtn]}
+              onPress={handleEmergencyCall}
+            >
+              <Text style={styles.quickBtnIcon}>🆘</Text>
+              <Text style={[styles.quickBtnLabel, styles.emergencyLabel]}>Emergency</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Modals — rendered outside the card so they cover the full screen */}
+      <WifiDialog
+        visible={wifiDialogVisible}
+        onClose={() => setWifiDialogVisible(false)}
+      />
+      <BluetoothDialog
+        visible={bluetoothDialogVisible}
+        onClose={() => setBluetoothDialogVisible(false)}
+      />
     </View>
   );
 };
@@ -280,6 +371,42 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#dc3545',
     fontFamily: 'monospace',
+  },
+  // Quick controls
+  quickControls: {
+    position: 'absolute',
+    bottom: 32,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 20,
+  },
+  quickBtn: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    elevation: 3,
+    minWidth: 80,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  quickBtnIcon: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  quickBtnLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#444',
+  },
+  emergencyBtn: {
+    borderColor: '#dc3545',
+    borderWidth: 2,
+  },
+  emergencyLabel: {
+    color: '#dc3545',
   },
 });
 

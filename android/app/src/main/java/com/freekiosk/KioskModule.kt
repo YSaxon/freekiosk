@@ -137,7 +137,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
     }
 
     @ReactMethod
-    fun startLockTask(externalAppPackage: String?, allowPowerButton: Boolean, allowNotifications: Boolean, allowSystemInfo: Boolean, promise: Promise) {
+    fun startLockTask(externalAppPackage: String?, allowPowerButton: Boolean, allowNotifications: Boolean, allowSystemInfo: Boolean, allowEmergencyCall: Boolean, promise: Promise) {
         try {
             val activity = reactApplicationContext.currentActivity
             if (activity != null && activity is MainActivity) {
@@ -149,7 +149,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                         if (dpm.isDeviceOwnerApp(reactApplicationContext.packageName)) {
                             // Build whitelist: FreeKiosk + external app + all managed apps
                             val whitelist = mutableListOf(reactApplicationContext.packageName)
-                            
+
                             // Use the passed parameter directly (more reliable than SharedPreferences timing)
                             if (!externalAppPackage.isNullOrEmpty()) {
                                 try {
@@ -160,13 +160,30 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                                     android.util.Log.e("KioskModule", "External app not found: $externalAppPackage")
                                 }
                             }
-                            
+
                             // Add all managed apps to the lock task whitelist
                             whitelist.addAll(getManagedAppPackages())
-                            
+
                             // Add print spooler packages if printing is enabled
                             if (isPrintEnabled()) {
                                 whitelist.addAll(getPrintSpoolerPackages())
+                            }
+
+                            // Whitelist the emergency dialer so the power-screen red button works
+                            if (allowEmergencyCall) {
+                                try {
+                                    val emergencyIntent = Intent(Intent.ACTION_EMERGENCY_DIAL)
+                                    val resolveInfo = reactApplicationContext.packageManager.resolveActivity(
+                                        emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY
+                                    )
+                                    val emergencyPackage = resolveInfo?.activityInfo?.packageName
+                                    if (!emergencyPackage.isNullOrEmpty()) {
+                                        whitelist.add(emergencyPackage)
+                                        android.util.Log.d("KioskModule", "Emergency dialer package whitelisted: $emergencyPackage")
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.w("KioskModule", "Could not resolve emergency dialer: ${e.message}")
+                                }
                             }
                             
                             val uniqueWhitelist = whitelist.distinct()
@@ -255,6 +272,25 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
             }
         } catch (e: Exception) {
             promise.reject("ERROR", "Failed to stop lock task: ${e.message}")
+        }
+    }
+
+    @ReactMethod
+    fun launchEmergencyDial(promise: Promise) {
+        try {
+            val activity = reactApplicationContext.currentActivity
+            if (activity == null) {
+                promise.reject("ERROR", "Activity not available")
+                return
+            }
+            val intent = Intent(Intent.ACTION_EMERGENCY_DIAL).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            activity.startActivity(intent)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            android.util.Log.e("KioskModule", "Failed to launch emergency dialer: ${e.message}")
+            promise.reject("ERROR", "Failed to launch emergency dialer: ${e.message}")
         }
     }
 

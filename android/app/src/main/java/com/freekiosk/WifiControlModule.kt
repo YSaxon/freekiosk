@@ -285,7 +285,13 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
 
     @Suppress("NewApi")
     private fun connectApi29(ssid: String, password: String, promise: Promise) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && connectPrivileged(ssid, password, promise)) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (!connectPrivileged(ssid, password, promise)) {
+                promise.reject(
+                    "ADD_NETWORK_PRIVILEGED_DENIED",
+                    "Android denied device-owner WiFi configuration for \"$ssid\"; refusing app-scoped fallback because it would not become the device default network"
+                )
+            }
             return
         }
 

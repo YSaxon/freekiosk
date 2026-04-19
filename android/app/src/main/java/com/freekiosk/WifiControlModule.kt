@@ -414,14 +414,15 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
             return true
         }
 
+        wifiManager.disconnect()
         val enabled = wifiManager.enableNetwork(netId, true)
         if (!enabled) {
             promise.reject("ENABLE_NETWORK_FAILED", "Android could not enable \"$ssid\" as the selected WiFi network")
             return true
         }
 
-        wifiManager.disconnect()
         wifiManager.reconnect()
+        android.util.Log.d("WifiControlModule", "Requested default WiFi connection for $ssid using addNetworkPrivileged netId=$netId")
         waitForDefaultWifi(ssid, promise)
         return true
     }
@@ -508,7 +509,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
                 val hasInternet = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
                 val isValidated = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
 
-                if (isDefaultWifi && hasInternet && currentSsid == ssid) {
+                if (isDefaultWifi && hasInternet && isValidated && currentSsid == ssid) {
                     activeWifiStatusPoll = null
                     val result = Arguments.createMap()
                     result.putBoolean("success", true)
@@ -522,7 +523,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
                     activeWifiStatusPoll = null
                     promise.reject(
                         "CONNECT_TIMEOUT",
-                        "Android joined \"$currentSsid\" but did not make \"$ssid\" the default WiFi internet network"
+                        "Android joined \"$currentSsid\" but did not validate \"$ssid\" as the default WiFi internet network"
                     )
                     return
                 }

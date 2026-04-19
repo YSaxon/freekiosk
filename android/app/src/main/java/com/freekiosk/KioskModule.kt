@@ -22,7 +22,7 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
     private var wakeLock: PowerManager.WakeLock? = null
-    private val emergencyDialAction = "android.intent.action.EMERGENCY_DIAL"
+    private val emergencyDialAction = "android.intent.action.DIAL_EMERGENCY"
 
     companion object {
         // Store the current instance to allow sending events from MainActivity
@@ -272,9 +272,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                 promise.reject("ERROR", "Activity not available")
                 return
             }
-            val intent = Intent(emergencyDialAction).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
+            val intent = createEmergencyDialIntent()
             activity.startActivity(intent)
             promise.resolve(true)
         } catch (e: Exception) {
@@ -1106,6 +1104,29 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
             android.util.Log.w("KioskModule", "Could not resolve emergency dialer packages: ${e.message}")
         }
         return packages.toList()
+    }
+
+    private fun createEmergencyDialIntent(): Intent {
+        val intent = Intent(emergencyDialAction).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        try {
+            val activityInfo = reactApplicationContext.packageManager.queryIntentActivities(
+                Intent(emergencyDialAction),
+                PackageManager.MATCH_DEFAULT_ONLY
+            ).firstOrNull()?.activityInfo
+
+            if (activityInfo?.packageName != null && activityInfo.name != null) {
+                intent.component = ComponentName(activityInfo.packageName, activityInfo.name)
+                android.util.Log.d(
+                    "KioskModule",
+                    "Launching emergency dialer component: ${activityInfo.packageName}/${activityInfo.name}"
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("KioskModule", "Could not choose emergency dialer component: ${e.message}")
+        }
+        return intent
     }
 
     private fun getManagedAppPackages(): List<String> {

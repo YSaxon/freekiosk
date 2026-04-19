@@ -75,7 +75,7 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
             adapter.bondedDevices?.forEach { device ->
                 val map = Arguments.createMap()
                 map.putString("address", device.address)
-                map.putString("name", device.name ?: device.address)
+                map.putString("name", getDeviceDisplayName(device))
                 map.putInt("type", device.type)
 
                 // Check if currently connected via reflection (hidden API)
@@ -187,9 +187,10 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
                             } ?: return
 
                             val rssi = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE).toInt()
+                            val advertisedName = intent.getStringExtra(BluetoothDevice.EXTRA_NAME)
                             val map = Arguments.createMap()
                             map.putString("address", device.address)
-                            map.putString("name", try { device.name ?: device.address } catch (_: SecurityException) { device.address })
+                            map.putString("name", getDeviceDisplayName(device, advertisedName))
                             map.putInt("rssi", rssi)
                             map.putBoolean("bonded", device.bondState == BluetoothDevice.BOND_BONDED)
                             sendEvent("bluetoothDeviceFound", map)
@@ -335,6 +336,22 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
             } catch (_: Exception) {}
             discoveryReceiver = null
         }
+    }
+
+    private fun getDeviceDisplayName(device: BluetoothDevice, advertisedName: String? = null): String {
+        advertisedName?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                device.alias?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+            } catch (_: SecurityException) {}
+        }
+
+        try {
+            device.name?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        } catch (_: SecurityException) {}
+
+        return "Unknown Bluetooth device"
     }
 
     // Required to suppress RN native module warnings

@@ -56,7 +56,7 @@ class MainActivity : ReactActivity() {
   
   // Volume change receiver (also handles 5-tap gesture detection)
   private var volumeChangeReceiver: VolumeChangeReceiver? = null
-  private val emergencyDialAction = "android.intent.action.EMERGENCY_DIAL"
+  private val emergencyDialAction = "android.intent.action.DIAL_EMERGENCY"
 
   // Debounce handler for hideSystemUI to avoid dismissing the power menu (GlobalActions)
   // on devices where onWindowFocusChanged fires rapidly (e.g. TECNO/HiOS on Android 14)
@@ -178,9 +178,30 @@ class MainActivity : ReactActivity() {
   }
 
   private fun requestLocationPermission() {
+    val needed = mutableListOf<String>()
     if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
         != PackageManager.PERMISSION_GRANTED) {
-      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1001)
+      needed.add(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        != PackageManager.PERMISSION_GRANTED) {
+      needed.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+    }
+    if (needed.isEmpty()) return
+
+    if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+      needed.forEach { perm ->
+        try {
+          devicePolicyManager.setPermissionGrantState(
+            adminComponent,
+            packageName,
+            perm,
+            DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+          )
+        } catch (_: Exception) {}
+      }
+    } else {
+      ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1001)
     }
   }
 

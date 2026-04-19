@@ -1,6 +1,8 @@
 package com.freekiosk
 
 import android.Manifest
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -34,6 +36,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
 
     private var scanReceiver: BroadcastReceiver? = null
     private var activeNetworkCallback: ConnectivityManager.NetworkCallback? = null
+    private var wifiRequestOriginalLockTaskPackages: Array<String>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     override fun getName(): String = "WifiControlModule"
 
@@ -306,6 +309,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         }
 
         releaseActiveNetworkRequest(connectivityManager)
+        allowWifiRequestDialogInLockTask()
 
         val specifierBuilder = WifiNetworkSpecifier.Builder().setSsid(ssid)
         if (password.isNotEmpty()) {
@@ -322,6 +326,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
             if (settled) return@Runnable
             settled = true
             releaseActiveNetworkRequest(connectivityManager)
+            restoreLockTaskPackages()
             promise.reject(
                 "CONNECT_TIMEOUT",
                 "Android did not connect to \"$ssid\". Check the password or approve the WiFi connection prompt."
@@ -334,6 +339,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
                 settled = true
                 mainHandler.removeCallbacks(timeout)
                 connectivityManager.bindProcessToNetwork(network)
+                restoreLockTaskPackages()
                 val result = Arguments.createMap()
                 result.putBoolean("success", true)
                 result.putString("ssid", ssid)
@@ -346,6 +352,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
                 settled = true
                 mainHandler.removeCallbacks(timeout)
                 releaseActiveNetworkRequest(connectivityManager)
+                restoreLockTaskPackages()
                 promise.reject("CONNECT_UNAVAILABLE", "Android could not connect to \"$ssid\"")
             }
         }
@@ -359,6 +366,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         } catch (e: Exception) {
             mainHandler.removeCallbacks(timeout)
             releaseActiveNetworkRequest(connectivityManager)
+            restoreLockTaskPackages()
             promise.reject("CONNECT_REQUEST_ERROR", e.message, e)
         }
     }
@@ -423,6 +431,58 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
             activeNetworkCallback = null
         }
         try { connectivityManager?.bindProcessToNetwork(null) } catch (_: Exception) {}
+    }
+
+    private fun allowWifiRequestDialogInLockTask() {
+        try {
+            val dpm = reactContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val admin = ComponentName(reactContext, DeviceAdminReceiver::class.java)
+            if (!dpm.isDeviceOwnerApp(reactContext.packageName)) return
+
+            val currentPackages = dpm.getLockTaskPackages(admin)
+            if (wifiRequestOriginalLockTaskPackages == null) {
+                wifiRequestOriginalLockTaskPackages = currentPackages
+            }
+
+            val settingsPackages = resolveWifiRequestDialogPackages()
+            val updated = (currentPackages.toList() + settingsPackages).distinct()
+            if (updated.size != currentPackages.size) {
+                dpm.setLockTaskPackages(admin, updated.toTypedArray())
+                android.util.Log.d("WifiControlModule", "Temporarily whitelisted WiFi request dialog packages: $settingsPackages")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("WifiControlModule", "Could not update lock task whitelist for WiFi request dialog: ${e.message}")
+        }
+    }
+
+    private fun restoreLockTaskPackages() {
+        val original = wifiRequestOriginalLockTaskPackages ?: return
+        try {
+            val dpm = reactContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val admin = ComponentName(reactContext, DeviceAdminReceiver::class.java)
+            if (dpm.isDeviceOwnerApp(reactContext.packageName)) {
+                dpm.setLockTaskPackages(admin, original)
+                android.util.Log.d("WifiControlModule", "Restored lock task packages after WiFi request")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("WifiControlModule", "Could not restore lock task packages after WiFi request: ${e.message}")
+        } finally {
+            wifiRequestOriginalLockTaskPackages = null
+        }
+    }
+
+    private fun resolveWifiRequestDialogPackages(): List<String> {
+        val packages = mutableSetOf("com.android.settings")
+        try {
+            val intent = Intent("com.android.settings.wifi.action.NETWORK_REQUEST").apply {
+                addCategory(Intent.CATEGORY_DEFAULT)
+            }
+            reactContext.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                .forEach { info ->
+                    info.activityInfo?.packageName?.let { packages.add(it) }
+                }
+        } catch (_: Exception) {}
+        return packages.toList()
     }
 
     // Required for addListener / removeListeners to suppress RN warnings

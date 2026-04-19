@@ -142,19 +142,11 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
     @ReactMethod
     fun openSystemBluetoothPanel(promise: Promise) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val intent = Intent(Settings.Panel.ACTION_BLUETOOTH).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                reactContext.startActivity(intent)
-                promise.resolve(true)
-            } else {
-                val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                reactContext.startActivity(intent)
-                promise.resolve(true)
+            val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            reactContext.startActivity(intent)
+            promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("BT_PANEL_ERROR", e.message, e)
         }

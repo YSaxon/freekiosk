@@ -170,7 +170,7 @@ class MainActivity : ReactActivity() {
   /**
    * Grant all dangerous runtime permissions in one pass.
    *
-   * Device Owner: dpm.grantRuntimePermission() grants silently — no dialogs ever shown.
+   * Device Owner: setPermissionGrantState() grants silently — no dialogs ever shown.
    * Non-Device-Owner: one requestPermissions() call for all missing permissions.
    *
    * Permissions that cannot be auto-granted here (AppOps / special-use protection level,
@@ -214,7 +214,14 @@ class MainActivity : ReactActivity() {
 
     if (isDeviceOwner) {
       notGranted.forEach { perm ->
-        try { dpm.grantRuntimePermission(admin, packageName, perm) } catch (_: Exception) {}
+        try {
+          dpm.setPermissionGrantState(
+            admin,
+            packageName,
+            perm,
+            DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+          )
+        } catch (_: Exception) {}
       }
     } else {
       ActivityCompat.requestPermissions(this, notGranted.toTypedArray(), 1001)

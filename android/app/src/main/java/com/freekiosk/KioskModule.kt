@@ -22,6 +22,7 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private val emergencyDialAction = "android.intent.action.EMERGENCY_DIAL"
 
     companion object {
         // Store the current instance to allow sending events from MainActivity
@@ -172,7 +173,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                             // Whitelist the emergency dialer so the power-screen red button works
                             if (allowEmergencyCall) {
                                 try {
-                                    val emergencyIntent = Intent(Intent.ACTION_EMERGENCY_DIAL)
+                                    val emergencyIntent = Intent(emergencyDialAction)
                                     val resolveInfo = reactApplicationContext.packageManager.resolveActivity(
                                         emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY
                                     )
@@ -308,7 +309,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                 promise.reject("ERROR", "Activity not available")
                 return
             }
-            val intent = Intent(Intent.ACTION_EMERGENCY_DIAL).apply {
+            val intent = Intent(emergencyDialAction).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             activity.startActivity(intent)

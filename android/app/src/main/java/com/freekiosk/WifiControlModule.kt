@@ -414,6 +414,12 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
             return true
         }
 
+        try {
+            wifiManager.allowAutojoinGlobal(true)
+        } catch (e: Exception) {
+            android.util.Log.w("WifiControlModule", "Could not enable global WiFi autojoin: ${e.message}")
+        }
+
         wifiManager.disconnect()
         val enabled = wifiManager.enableNetwork(netId, true)
         if (!enabled) {

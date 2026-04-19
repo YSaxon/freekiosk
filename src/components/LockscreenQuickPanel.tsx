@@ -68,6 +68,7 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
   // ── panel open/close ──────────────────────────────────────────────────────
   const [isOpen, setIsOpen] = useState(false);
   const panelY = useRef(new Animated.Value(0)).current;
+  const panelYStart = useRef(0);
 
   // ── sub-dialogs ──────────────────────────────────────────────────────────
   const [wifiDialogVisible, setWifiDialogVisible] = useState(false);
@@ -109,13 +110,16 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
+      onPanResponderGrant: () => {
+        panelYStart.current = isOpen ? panelHeight : 0;
+      },
       onPanResponderMove: (_, gs) => {
-        const clamped = Math.max(0, Math.min(panelHeight, gs.dy));
+        const clamped = Math.max(0, Math.min(panelHeight, panelYStart.current + gs.dy));
         panelY.setValue(clamped);
       },
       onPanResponderRelease: (_, gs) => {
-        if (gs.dy > DRAG_THRESHOLD) open();
-        else if (gs.dy < -DRAG_THRESHOLD) close();
+        if (panelYStart.current + gs.dy > panelHeight / 2 || gs.dy > DRAG_THRESHOLD) open();
+        else if (gs.dy < -DRAG_THRESHOLD || panelYStart.current + gs.dy <= panelHeight / 2) close();
         else {
           Animated.spring(panelY, {
             toValue: isOpen ? panelHeight : 0,
@@ -202,7 +206,6 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
           { transform: [{ translateY: panelY }] },
           { top: -panelHeight },   // sits above screen edge; panelY slides it into view
         ]}
-        {...panResponder.panHandlers}
       >
         {/* Content rows */}
         <Animated.View
@@ -257,7 +260,10 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
               {/* Output selector */}
               <TouchableOpacity
                 style={styles.outputBtn}
-                onPress={() => setOutputPickerVisible(true)}
+                onPress={async () => {
+                  await refreshAudio();
+                  setOutputPickerVisible(true);
+                }}
               >
                 <Text style={styles.outputIcon}>{currentOutputIcon}</Text>
               </TouchableOpacity>
@@ -294,6 +300,7 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
           onPress={() => (isOpen ? close() : open())}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
+          {...panResponder.panHandlers}
         >
           <View style={styles.handleBar} />
         </TouchableOpacity>
@@ -333,6 +340,9 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
                 </TouchableOpacity>
               );
             })}
+            {(audioInfo?.availableOutputs ?? []).length === 0 && (
+              <Text style={styles.pickerEmpty}>No selectable outputs found</Text>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -495,5 +505,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#4fc3f7',
     fontWeight: 'bold',
+  },
+  pickerEmpty: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
   },
 });

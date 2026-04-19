@@ -172,19 +172,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
 
                             // Whitelist the emergency dialer so the power-screen red button works
                             if (allowEmergencyCall) {
-                                try {
-                                    val emergencyIntent = Intent(emergencyDialAction)
-                                    val resolveInfo = reactApplicationContext.packageManager.resolveActivity(
-                                        emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY
-                                    )
-                                    val emergencyPackage = resolveInfo?.activityInfo?.packageName
-                                    if (!emergencyPackage.isNullOrEmpty()) {
-                                        whitelist.add(emergencyPackage)
-                                        android.util.Log.d("KioskModule", "Emergency dialer package whitelisted: $emergencyPackage")
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.w("KioskModule", "Could not resolve emergency dialer: ${e.message}")
-                                }
+                                whitelist.addAll(getEmergencyDialerPackages())
                             }
                             
                             val uniqueWhitelist = whitelist.distinct()
@@ -1096,6 +1084,26 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
             android.util.Log.d("KioskModule", "Print spooler packages for whitelist: $packages")
         } catch (e: Exception) {
             android.util.Log.w("KioskModule", "Could not discover print services: ${e.message}")
+        }
+        return packages.toList()
+    }
+
+    private fun getEmergencyDialerPackages(): List<String> {
+        val packages = mutableSetOf<String>()
+        val emergencyIntent = Intent(emergencyDialAction)
+        try {
+            reactApplicationContext.packageManager.resolveActivity(
+                emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY
+            )?.activityInfo?.packageName?.let { packages.add(it) }
+
+            reactApplicationContext.packageManager.queryIntentActivities(
+                emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY
+            ).forEach { info ->
+                info.activityInfo?.packageName?.let { packages.add(it) }
+            }
+            android.util.Log.d("KioskModule", "Emergency dialer packages for whitelist: $packages")
+        } catch (e: Exception) {
+            android.util.Log.w("KioskModule", "Could not resolve emergency dialer packages: ${e.message}")
         }
         return packages.toList()
     }

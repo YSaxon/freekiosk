@@ -56,6 +56,7 @@ class MainActivity : ReactActivity() {
   
   // Volume change receiver (also handles 5-tap gesture detection)
   private var volumeChangeReceiver: VolumeChangeReceiver? = null
+  private val emergencyDialAction = "android.intent.action.EMERGENCY_DIAL"
 
   // Debounce handler for hideSystemUI to avoid dismissing the power menu (GlobalActions)
   // on devices where onWindowFocusChanged fires rapidly (e.g. TECNO/HiOS on Android 14)
@@ -101,6 +102,9 @@ class MainActivity : ReactActivity() {
 
     // Request Bluetooth runtime permissions (Android 12+ / API 31+)
     requestBluetoothPermissions()
+
+    // Request Android 13+ WiFi scan permission for visible SSID results
+    requestWifiPermissions()
 
     readExternalAppConfig()
     ensureBootReceiverEnabled()
@@ -216,6 +220,25 @@ class MainActivity : ReactActivity() {
     }
   }
 
+  private fun requestWifiPermissions() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES)
+        == PackageManager.PERMISSION_GRANTED) return
+
+    if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+      try {
+        devicePolicyManager.setPermissionGrantState(
+          adminComponent,
+          packageName,
+          Manifest.permission.NEARBY_WIFI_DEVICES,
+          DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+        )
+      } catch (_: Exception) {}
+    } else {
+      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES), 1004)
+    }
+  }
+
   private fun checkAndStartLockTask() {
     val kioskEnabled = isKioskEnabled()
     DebugLog.d("MainActivity", "Kiosk enabled: $kioskEnabled")
@@ -267,6 +290,10 @@ class MainActivity : ReactActivity() {
         // Add print spooler packages if printing is enabled
         if (isPrintSettingEnabled()) {
             whitelist.addAll(getPrintSpoolerPackages())
+        }
+
+        if (getAsyncStorageValue("@kiosk_lockscreen_emergency_call_enabled", "false") == "true") {
+          whitelist.addAll(getEmergencyDialerPackages())
         }
         
         val uniqueWhitelist = whitelist.distinct()
@@ -791,6 +818,25 @@ class MainActivity : ReactActivity() {
     } catch (e: Exception) {
       DebugLog.errorProduction("MainActivity", "Error bringing FreeKiosk to front with PIN: ${e.message}")
     }
+  }
+
+  private fun getEmergencyDialerPackages(): List<String> {
+    val packages = mutableSetOf<String>()
+    val emergencyIntent = Intent(emergencyDialAction)
+    try {
+      packageManager.resolveActivity(emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        ?.activityInfo?.packageName
+        ?.let { packages.add(it) }
+
+      packageManager.queryIntentActivities(emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        .forEach { info ->
+          info.activityInfo?.packageName?.let { packages.add(it) }
+        }
+      DebugLog.d("MainActivity", "Emergency dialer packages for whitelist: $packages")
+    } catch (e: Exception) {
+      DebugLog.errorProduction("MainActivity", "Could not resolve emergency dialer packages: ${e.message}")
+    }
+    return packages.toList()
   }
 
   private fun readExternalAppConfig() {

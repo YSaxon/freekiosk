@@ -188,6 +188,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [lockscreenSwipeDownWifi, setLockscreenSwipeDownWifi] = useState<boolean>(false);
   const [lockscreenSwipeDownBt, setLockscreenSwipeDownBt] = useState<boolean>(false);
   const [lockscreenSwipeDownAudio, setLockscreenSwipeDownAudio] = useState<boolean>(false);
+  const [lockscreenEmergencyEnabled, setLockscreenEmergencyEnabled] = useState<boolean>(false);
 
   // Media Player states
   const [mediaPlayerItems, setMediaPlayerItems] = useState<MediaItem[]>([]);
@@ -1479,10 +1480,12 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       const savedSwipeDownWifi = bool(K.LOCKSCREEN_WIFI_ENABLED, false);
       const savedSwipeDownBt = bool(K.LOCKSCREEN_BLUETOOTH_ENABLED, false);
       const savedSwipeDownAudio = bool(K.LOCKSCREEN_AUDIO_ENABLED, false);
+      const savedEmergencyEnabled = bool(K.LOCKSCREEN_EMERGENCY_CALL_ENABLED, false);
       setLockscreenSwipeDownEnabled(savedSwipeDownEnabled);
       setLockscreenSwipeDownWifi(savedSwipeDownWifi);
       setLockscreenSwipeDownBt(savedSwipeDownBt);
       setLockscreenSwipeDownAudio(savedSwipeDownAudio);
+      setLockscreenEmergencyEnabled(savedEmergencyEnabled);
 
       // Load PDF Viewer setting
       const savedPdfViewerEnabled = bool(K.PDF_VIEWER_ENABLED, false);
@@ -1596,7 +1599,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         try {
           // Pass external app package so it gets added to whitelist
           const packageToWhitelist = savedDisplayMode === 'external_app' && savedExternalAppPackage ? savedExternalAppPackage : undefined;
-          await KioskModule.startLockTask(packageToWhitelist, savedAllowPowerButton, savedAllowNotifications, savedAllowSystemInfo);
+          await KioskModule.startLockTask(packageToWhitelist, savedAllowPowerButton, savedAllowNotifications, savedAllowSystemInfo, savedEmergencyEnabled);
         } catch {
           // Silent fail
         }
@@ -2371,11 +2374,12 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       )}
 
       {/* Swipe-down quick panel for WiFi / Bluetooth — only when enabled in settings */}
-      {lockscreenSwipeDownEnabled && (lockscreenSwipeDownWifi || lockscreenSwipeDownBt || lockscreenSwipeDownAudio) && (
+      {lockscreenSwipeDownEnabled && (lockscreenSwipeDownWifi || lockscreenSwipeDownBt || lockscreenSwipeDownAudio || lockscreenEmergencyEnabled) && (
         <LockscreenQuickPanel
           showWifi={lockscreenSwipeDownWifi}
           showBluetooth={lockscreenSwipeDownBt}
           showAudio={lockscreenSwipeDownAudio}
+          showEmergency={lockscreenEmergencyEnabled}
         />
       )}
     </View>

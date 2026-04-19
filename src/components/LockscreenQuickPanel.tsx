@@ -18,13 +18,12 @@ import {
   StyleSheet,
   NativeModules,
   Modal,
-  FlatList,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import WifiDialog from './WifiDialog';
 import BluetoothDialog from './BluetoothDialog';
 
-const { AudioControlModule } = NativeModules;
+const { AudioControlModule, KioskModule } = NativeModules;
 
 const HANDLE_HEIGHT = 20;
 const ROW_HEIGHT = 80; // height per content row
@@ -62,9 +61,10 @@ interface Props {
   showWifi: boolean;
   showBluetooth: boolean;
   showAudio: boolean;
+  showEmergency: boolean;
 }
 
-export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudio }: Props) {
+export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudio, showEmergency }: Props) {
   // ── panel open/close ──────────────────────────────────────────────────────
   const [isOpen, setIsOpen] = useState(false);
   const panelY = useRef(new Animated.Value(0)).current;
@@ -80,7 +80,7 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
 
   const rowCount =
-    (showWifi || showBluetooth ? 1 : 0) +
+    (showWifi || showBluetooth || showEmergency ? 1 : 0) +
     (showAudio ? 1 : 0);
   const panelHeight = rowCount * ROW_HEIGHT;
 
@@ -180,6 +180,13 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
       console.warn('[LockscreenQuickPanel] setAudioOutput error:', e);
     }
   };
+  const handleEmergencyCall = async () => {
+    try {
+      await KioskModule.launchEmergencyDial();
+    } catch (e) {
+      console.warn('[LockscreenQuickPanel] launchEmergencyDial error:', e);
+    }
+  };
 
   if (rowCount === 0) return null;
 
@@ -211,8 +218,8 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
           ]}
           pointerEvents={isOpen ? 'auto' : 'none'}
         >
-          {/* WiFi / BT row */}
-          {(showWifi || showBluetooth) && (
+          {/* WiFi / BT / Emergency row */}
+          {(showWifi || showBluetooth || showEmergency) && (
             <View style={styles.row}>
               {showWifi && (
                 <TouchableOpacity
@@ -230,6 +237,15 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
                 >
                   <Text style={styles.iconBtnIcon}>🔵</Text>
                   <Text style={styles.iconBtnLabel}>Bluetooth</Text>
+                </TouchableOpacity>
+              )}
+              {showEmergency && (
+                <TouchableOpacity
+                  style={[styles.iconBtn, styles.emergencyBtn]}
+                  onPress={handleEmergencyCall}
+                >
+                  <Text style={styles.iconBtnIcon}>🚨</Text>
+                  <Text style={[styles.iconBtnLabel, styles.emergencyLabel]}>Emergency</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -380,6 +396,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#ddd',
     fontWeight: '600',
+  },
+  emergencyBtn: {
+    backgroundColor: 'rgba(220,50,50,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(220,50,50,0.6)',
+  },
+  emergencyLabel: {
+    color: '#ff6b6b',
   },
   // ── audio controls
   outputBtn: {

@@ -214,7 +214,14 @@ class MainActivity : ReactActivity() {
     val admin = ComponentName(this, DeviceAdminReceiver::class.java)
     if (dpm.isDeviceOwnerApp(packageName)) {
       needed.forEach { perm ->
-        try { dpm.grantRuntimePermission(admin, packageName, perm) } catch (_: Exception) {}
+        try {
+          dpm.setPermissionGrantState(
+            admin,
+            packageName,
+            perm,
+            DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+          )
+        } catch (_: Exception) {}
       }
     } else {
       ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1003)

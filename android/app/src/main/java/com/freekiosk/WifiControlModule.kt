@@ -36,6 +36,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
 
     private var scanReceiver: BroadcastReceiver? = null
     private var activeNetworkCallback: ConnectivityManager.NetworkCallback? = null
+    private var activeWifiStatusPoll: Runnable? = null
     private var wifiRequestOriginalLockTaskPackages: Array<String>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     override fun getName(): String = "WifiControlModule"
@@ -282,11 +283,14 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    // Android 10+ (API 29+): WifiNetworkSuggestion establishes a full
-    // internet-providing system-wide Wi-Fi connection (unlike WifiNetworkSpecifier
-    // which only binds the requesting process to a peer/local network).
     @Suppress("NewApi")
     private fun connectApi29(ssid: String, password: String, promise: Promise) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && connectPrivileged(ssid, password, promise)) {
+            return
+        }
+
+        // Fallback for Android 10/11. This creates an app-scoped request, so it
+        // is not suitable as the primary kiosk path on modern device-owner builds.
         val wifiManager = reactContext.applicationContext
             .getSystemService(Context.WIFI_SERVICE) as WifiManager
         val connectivityManager = reactContext.applicationContext
@@ -371,6 +375,51 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    @Suppress("DEPRECATION", "NewApi")
+    private fun connectPrivileged(ssid: String, password: String, promise: Promise): Boolean {
+        val wifiManager = reactContext.applicationContext
+            .getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val connectivityManager = reactContext.applicationContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        val config = buildWifiConfiguration(ssid, password)
+        val addResult = try {
+            wifiManager.addNetworkPrivileged(config)
+        } catch (security: SecurityException) {
+            android.util.Log.w("WifiControlModule", "addNetworkPrivileged denied: ${security.message}")
+            return false
+        } catch (e: Exception) {
+            promise.reject("ADD_NETWORK_PRIVILEGED_ERROR", e.message, e)
+            return true
+        }
+
+        if (addResult.statusCode != WifiManager.AddNetworkResult.STATUS_SUCCESS) {
+            android.util.Log.w(
+                "WifiControlModule",
+                "addNetworkPrivileged failed for $ssid: status=${addResult.statusCode}"
+            )
+            return false
+        }
+
+        releaseActiveNetworkRequest(connectivityManager)
+        val netId = addResult.networkId
+        if (netId < 0) {
+            promise.reject("ADD_NETWORK_PRIVILEGED_FAILED", "Android did not return a valid network id for \"$ssid\"")
+            return true
+        }
+
+        val enabled = wifiManager.enableNetwork(netId, true)
+        if (!enabled) {
+            promise.reject("ENABLE_NETWORK_FAILED", "Android could not enable \"$ssid\" as the selected WiFi network")
+            return true
+        }
+
+        wifiManager.disconnect()
+        wifiManager.reconnect()
+        waitForDefaultWifi(ssid, promise)
+        return true
+    }
+
     // Pre-Android 10: Use the (deprecated) WifiConfiguration approach which
     // does not require a system dialog and works silently.
     @Suppress("DEPRECATION")
@@ -378,14 +427,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         val wifiManager = reactContext.applicationContext
             .getSystemService(Context.WIFI_SERVICE) as WifiManager
 
-        val config = WifiConfiguration().apply {
-            SSID = "\"$ssid\""
-            if (password.isEmpty()) {
-                allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
-            } else {
-                preSharedKey = "\"$password\""
-            }
-        }
+        val config = buildWifiConfiguration(ssid, password)
 
         val netId = wifiManager.addNetwork(config)
         if (netId == -1) {
@@ -422,10 +464,77 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    @Suppress("DEPRECATION")
+    private fun buildWifiConfiguration(ssid: String, password: String): WifiConfiguration {
+        return WifiConfiguration().apply {
+            SSID = "\"$ssid\""
+            if (password.isEmpty()) {
+                allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setSecurityParams(WifiConfiguration.SECURITY_TYPE_OPEN)
+                }
+            } else {
+                preSharedKey = "\"$password\""
+                allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setSecurityParams(WifiConfiguration.SECURITY_TYPE_PSK)
+                }
+            }
+        }
+    }
+
+    private fun waitForDefaultWifi(ssid: String, promise: Promise) {
+        val wifiManager = reactContext.applicationContext
+            .getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val connectivityManager = reactContext.applicationContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val startedAt = System.currentTimeMillis()
+        val timeoutMs = 30_000L
+
+        activeWifiStatusPoll?.let { mainHandler.removeCallbacks(it) }
+        activeWifiStatusPoll = object : Runnable {
+            override fun run() {
+                val activeNetwork = connectivityManager.activeNetwork
+                val caps = connectivityManager.getNetworkCapabilities(activeNetwork)
+                @Suppress("DEPRECATION")
+                val currentSsid = wifiManager.connectionInfo?.ssid?.replace("\"", "")?.trim().orEmpty()
+                val isDefaultWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+                val hasInternet = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+                val isValidated = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+
+                if (isDefaultWifi && hasInternet && currentSsid == ssid) {
+                    activeWifiStatusPoll = null
+                    val result = Arguments.createMap()
+                    result.putBoolean("success", true)
+                    result.putString("ssid", ssid)
+                    result.putBoolean("validated", isValidated)
+                    promise.resolve(result)
+                    return
+                }
+
+                if (System.currentTimeMillis() - startedAt >= timeoutMs) {
+                    activeWifiStatusPoll = null
+                    promise.reject(
+                        "CONNECT_TIMEOUT",
+                        "Android joined \"$currentSsid\" but did not make \"$ssid\" the default WiFi internet network"
+                    )
+                    return
+                }
+
+                mainHandler.postDelayed(this, 500)
+            }
+        }
+        mainHandler.post(activeWifiStatusPoll!!)
+    }
+
     private fun releaseActiveNetworkRequest(
         connectivityManager: ConnectivityManager? = reactContext.applicationContext
             .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     ) {
+        activeWifiStatusPoll?.let {
+            mainHandler.removeCallbacks(it)
+            activeWifiStatusPoll = null
+        }
         activeNetworkCallback?.let { callback ->
             try { connectivityManager?.unregisterNetworkCallback(callback) } catch (_: Exception) {}
             activeNetworkCallback = null

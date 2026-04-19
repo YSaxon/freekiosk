@@ -93,14 +93,8 @@ class MainActivity : ReactActivity() {
       return  // Exit - app restarting with new config
     }
 
-    // Request location permission for WiFi SSID access (Android 8+ requires it)
-    requestLocationPermission()
-
-    // Request camera permission for motion detection
-    requestCameraPermission()
-
-    // Request Bluetooth runtime permissions (Android 12+ / API 31+)
-    requestBluetoothPermissions()
+    // Grant all dangerous runtime permissions (silently if Device Owner, dialog otherwise)
+    requestRuntimePermissions()
 
     readExternalAppConfig()
     ensureBootReceiverEnabled()
@@ -173,39 +167,62 @@ class MainActivity : ReactActivity() {
     }
   }
 
-  private fun requestLocationPermission() {
-    if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-        != PackageManager.PERMISSION_GRANTED) {
-      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1001)
-    }
-  }
-
-  private fun requestCameraPermission() {
-    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-        != PackageManager.PERMISSION_GRANTED) {
-      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 1002)
-    }
-  }
-
-  private fun requestBluetoothPermissions() {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return  // API 31+ only
-
-    val needed = mutableListOf<String>()
-    if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
-        != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.BLUETOOTH_CONNECT)
-    if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN)
-        != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.BLUETOOTH_SCAN)
-    if (needed.isEmpty()) return
-
-    // Device Owner: grant silently without a user-facing dialog
+  /**
+   * Grant all dangerous runtime permissions.
+   *
+   * Device Owner path: dpm.grantRuntimePermission() grants them silently — no dialogs.
+   * Non-Device-Owner path: falls back to the standard requestPermissions() dialog for the
+   * subset of permissions actually needed at runtime.
+   *
+   * Cannot auto-grant via DPM (AppOps/special-use protection level, not "dangerous"):
+   *   - SYSTEM_ALERT_WINDOW  → user must toggle in Settings (OverlayPermissionModule)
+   *   - PACKAGE_USAGE_STATS  → user must toggle in Settings (KioskModule)
+   *   - REQUEST_INSTALL_PACKAGES → user must toggle in Settings (UpdateModule)
+   */
+  private fun requestRuntimePermissions() {
     val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     val admin = ComponentName(this, DeviceAdminReceiver::class.java)
-    if (dpm.isDeviceOwnerApp(packageName)) {
-      needed.forEach { perm ->
-        try { dpm.grantRuntimePermission(admin, packageName, perm) } catch (_: Exception) {}
+    val isDeviceOwner = dpm.isDeviceOwnerApp(packageName)
+
+    // Build the list of dangerous permissions relevant to this device's API level
+    val candidates = mutableListOf(
+      Manifest.permission.ACCESS_FINE_LOCATION,
+      Manifest.permission.ACCESS_COARSE_LOCATION,
+      Manifest.permission.CAMERA,
+      Manifest.permission.RECORD_AUDIO,
+    )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      candidates += listOf(
+        Manifest.permission.BLUETOOTH_CONNECT,
+        Manifest.permission.BLUETOOTH_SCAN,
+      )
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      candidates += listOf(
+        Manifest.permission.READ_MEDIA_VIDEO,
+        Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.POST_NOTIFICATIONS,
+      )
+    } else {
+      candidates += listOf(
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+      )
+    }
+
+    val notGranted = candidates.filter {
+      ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+    }
+    if (notGranted.isEmpty()) return
+
+    if (isDeviceOwner) {
+      notGranted.forEach { perm ->
+        try {
+          dpm.grantRuntimePermission(admin, packageName, perm)
+        } catch (_: Exception) {}
       }
     } else {
-      ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1003)
+      ActivityCompat.requestPermissions(this, notGranted.toTypedArray(), 1001)
     }
   }
 

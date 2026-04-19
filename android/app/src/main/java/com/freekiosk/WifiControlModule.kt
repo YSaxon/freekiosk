@@ -9,11 +9,10 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
-import android.net.wifi.WifiNetworkSpecifier
+import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
@@ -30,13 +29,10 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
     private var scanReceiver: BroadcastReceiver? = null
-    private var connectivityCallback: ConnectivityManager.NetworkCallback? = null
-
     override fun getName(): String = "WifiControlModule"
 
     override fun onCatalystInstanceDestroy() {
         unregisterScanReceiver()
-        unregisterConnectivityCallback()
     }
 
     // ─── State ────────────────────────────────────────────────────────────────
@@ -236,47 +232,35 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    // Android 10+ (API 29+): WifiNetworkSpecifier triggers a system dialog
-    // asking the user to confirm the connection. This keeps us inside the app
-    // (no full Settings needed) while still being secure.
+    // Android 10+ (API 29+): WifiNetworkSuggestion establishes a full
+    // internet-providing system-wide Wi-Fi connection (unlike WifiNetworkSpecifier
+    // which only binds the requesting process to a peer/local network).
     @Suppress("NewApi")
     private fun connectApi29(ssid: String, password: String, promise: Promise) {
-        val connectivityManager = reactContext
-            .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val wifiManager = reactContext.applicationContext
+            .getSystemService(Context.WIFI_SERVICE) as WifiManager
 
-        val specifierBuilder = WifiNetworkSpecifier.Builder().setSsid(ssid)
+        val suggestionBuilder = WifiNetworkSuggestion.Builder().setSsid(ssid)
         if (password.isNotEmpty()) {
-            specifierBuilder.setWpa2Passphrase(password)
+            suggestionBuilder.setWpa2Passphrase(password)
         }
+        val suggestion = suggestionBuilder.build()
 
-        val request = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-            .setNetworkSpecifier(specifierBuilder.build())
-            .build()
+        // Remove any stale suggestion for this SSID before adding the new one
+        wifiManager.removeNetworkSuggestions(listOf(suggestion))
+        val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
 
-        unregisterConnectivityCallback()
-
-        var resolved = false
-        connectivityCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                if (!resolved) {
-                    resolved = true
-                    val result = Arguments.createMap()
-                    result.putBoolean("success", true)
-                    result.putString("ssid", ssid)
-                    promise.resolve(result)
-                }
-            }
-
-            override fun onUnavailable() {
-                if (!resolved) {
-                    resolved = true
-                    promise.reject("CONNECT_UNAVAILABLE", "Could not connect to $ssid")
-                }
-            }
+        if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS ||
+            status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE) {
+            // Trigger a scan so the system finds and connects to the network quickly
+            wifiManager.startScan()
+            val result = Arguments.createMap()
+            result.putBoolean("success", true)
+            result.putString("ssid", ssid)
+            promise.resolve(result)
+        } else {
+            promise.reject("CONNECT_ERROR", "addNetworkSuggestions failed: status=$status")
         }
-
-        connectivityManager.requestNetwork(request, connectivityCallback!!)
     }
 
     // Pre-Android 10: Use the (deprecated) WifiConfiguration approach which
@@ -327,17 +311,6 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         scanReceiver?.let {
             try { reactContext.unregisterReceiver(it) } catch (_: Exception) {}
             scanReceiver = null
-        }
-    }
-
-    private fun unregisterConnectivityCallback() {
-        connectivityCallback?.let {
-            try {
-                val cm = reactContext.getSystemService(Context.CONNECTIVITY_SERVICE)
-                    as ConnectivityManager
-                cm.unregisterNetworkCallback(it)
-            } catch (_: Exception) {}
-            connectivityCallback = null
         }
     }
 

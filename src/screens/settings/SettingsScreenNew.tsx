@@ -1328,7 +1328,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     if (kioskEnabled) {
       try {
         const packageToWhitelist = displayMode === 'external_app' ? externalAppPackage : null;
-        await KioskModule.startLockTask(packageToWhitelist, allowPowerButton, allowNotifications, allowSystemInfo);
+        await KioskModule.startLockTask(packageToWhitelist, allowPowerButton, allowNotifications, allowSystemInfo, lockscreenEmergencyCallEnabled);
       } catch (error) {
         console.warn('[Settings] startLockTask error (non-blocking):', error);
       }

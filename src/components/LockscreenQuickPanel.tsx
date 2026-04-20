@@ -186,6 +186,7 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
     try {
       await AudioControlModule.setAudioOutput(outputId);
       await refreshAudio();
+      close();
     } catch (e) {
       console.warn('[LockscreenQuickPanel] setAudioOutput error:', e);
     }

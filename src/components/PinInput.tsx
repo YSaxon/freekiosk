@@ -13,7 +13,7 @@ import { verifySecurePin, getLockoutStatus, hasSecurePin } from '../utils/secure
 import { StorageService } from '../utils/storage';
 import WifiDialog from './WifiDialog';
 import BluetoothDialog from './BluetoothDialog';
-import LockscreenQuickPanel from './LockscreenQuickPanel';
+import AudioOutputDialog from './AudioOutputDialog';
 
 const { KioskModule } = NativeModules;
 
@@ -37,11 +37,11 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   const [showBluetoothButton, setShowBluetoothButton] = useState(false);
   const [showAudioControls, setShowAudioControls] = useState(false);
   const [showEmergencyButton, setShowEmergencyButton] = useState(false);
-  const [audioPanelOpenSignal, setAudioPanelOpenSignal] = useState(0);
 
   // Dialog visibility
   const [wifiDialogVisible, setWifiDialogVisible] = useState(false);
   const [bluetoothDialogVisible, setBluetoothDialogVisible] = useState(false);
+  const [audioDialogVisible, setAudioDialogVisible] = useState(false);
 
   useEffect(() => {
     checkLockoutStatus();
@@ -250,7 +250,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
           {showAudioControls && (
             <TouchableOpacity
               style={styles.quickBtn}
-              onPress={() => setAudioPanelOpenSignal((value) => value + 1)}
+              onPress={() => setAudioDialogVisible(true)}
             >
               <Text style={styles.quickBtnIcon}>🔊</Text>
               <Text style={styles.quickBtnLabel}>Audio</Text>
@@ -278,12 +278,9 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
         visible={bluetoothDialogVisible}
         onClose={() => setBluetoothDialogVisible(false)}
       />
-      <LockscreenQuickPanel
-        showWifi={false}
-        showBluetooth={false}
-        showAudio={showAudioControls}
-        showEmergency={false}
-        openSignal={audioPanelOpenSignal}
+      <AudioOutputDialog
+        visible={audioDialogVisible}
+        onClose={() => setAudioDialogVisible(false)}
       />
     </View>
   );
@@ -394,19 +391,25 @@ const styles = StyleSheet.create({
   quickControls: {
     position: 'absolute',
     bottom: 32,
+    width: '100%',
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    paddingHorizontal: 20,
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: 10,
+    columnGap: 8,
+    paddingHorizontal: 16,
   },
   quickBtn: {
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     elevation: 3,
-    minWidth: 80,
+    width: 78,
+    minHeight: 72,
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
@@ -415,9 +418,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   quickBtnLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#444',
+    textAlign: 'center',
   },
   emergencyBtn: {
     borderColor: '#dc3545',

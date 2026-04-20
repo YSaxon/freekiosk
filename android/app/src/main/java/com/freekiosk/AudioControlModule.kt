@@ -18,6 +18,8 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
 
     override fun getName(): String = "AudioControlModule"
 
+    private var preferredOutput: String = "auto"
+
     private fun audioManager(): AudioManager =
         reactContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
@@ -125,16 +127,22 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
                         }
                     }
                     // Also apply legacy path for full-stack coverage
+                    am.stopBluetoothSco()
+                    am.isBluetoothScoOn = false
                     am.mode = AudioManager.MODE_IN_COMMUNICATION
                     am.isSpeakerphoneOn = true
+                    preferredOutput = "speaker"
                     promise.resolve(true)
                 }
                 "auto" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         am.clearCommunicationDevice()
                     }
+                    am.stopBluetoothSco()
+                    am.isBluetoothScoOn = false
                     am.isSpeakerphoneOn = false
                     am.mode = AudioManager.MODE_NORMAL
+                    preferredOutput = "auto"
                     promise.resolve(true)
                 }
                 "bluetooth_sco" -> {
@@ -142,12 +150,34 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
                     am.isSpeakerphoneOn = false
                     am.startBluetoothSco()
                     am.isBluetoothScoOn = true
+                    preferredOutput = "bluetooth_sco"
+                    promise.resolve(true)
+                }
+                "bluetooth_a2dp",
+                "wired_headphones",
+                "wired_headset",
+                "usb_headset",
+                "hdmi" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        am.clearCommunicationDevice()
+                    }
+                    am.stopBluetoothSco()
+                    am.isBluetoothScoOn = false
+                    am.isSpeakerphoneOn = false
+                    am.mode = AudioManager.MODE_NORMAL
+                    preferredOutput = outputType
                     promise.resolve(true)
                 }
                 else -> {
                     // Unknown type — fall back to auto
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        am.clearCommunicationDevice()
+                    }
+                    am.stopBluetoothSco()
+                    am.isBluetoothScoOn = false
                     am.isSpeakerphoneOn = false
                     am.mode = AudioManager.MODE_NORMAL
+                    preferredOutput = "auto"
                     promise.resolve(true)
                 }
             }
@@ -161,6 +191,12 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
     private fun describeCurrentOutput(am: AudioManager): String {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val outputs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            if (preferredOutput == "speaker" && isUsingSpeaker(am)) return "speaker"
+            if (preferredOutput == "bluetooth_sco" && am.isBluetoothScoOn) return "bluetooth_sco"
+            if (preferredOutput != "auto" && outputs.any { outputTypeForDevice(it) == preferredOutput }) {
+                return preferredOutput
+            }
+
             // Priority: BT A2DP > wired headset/headphones > USB > speaker
             return when {
                 outputs.any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP } -> "bluetooth_a2dp"
@@ -169,7 +205,7 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
                 outputs.any { it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET } -> "wired_headset"
                 outputs.any { it.type == AudioDeviceInfo.TYPE_USB_HEADSET } -> "usb_headset"
                 outputs.any { it.type == AudioDeviceInfo.TYPE_HDMI } -> "hdmi"
-                am.isSpeakerphoneOn -> "speaker_forced"
+                am.isSpeakerphoneOn -> "speaker"
                 else -> "speaker"
             }
         }
@@ -181,6 +217,27 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
             am.isWiredHeadsetOn -> "wired_headset"
             am.isSpeakerphoneOn -> "speaker_forced"
             else -> "speaker"
+        }
+    }
+
+    private fun isUsingSpeaker(am: AudioManager): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            am.communicationDevice?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER || am.isSpeakerphoneOn
+        } else {
+            am.isSpeakerphoneOn
+        }
+    }
+
+    private fun outputTypeForDevice(device: AudioDeviceInfo): String? {
+        return when (device.type) {
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "bluetooth_a2dp"
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "bluetooth_sco"
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "wired_headphones"
+            AudioDeviceInfo.TYPE_WIRED_HEADSET -> "wired_headset"
+            AudioDeviceInfo.TYPE_USB_HEADSET -> "usb_headset"
+            AudioDeviceInfo.TYPE_HDMI -> "hdmi"
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "speaker"
+            else -> null
         }
     }
 

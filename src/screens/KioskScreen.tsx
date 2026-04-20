@@ -2411,12 +2411,12 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         />
       )}
 
-      {/* Swipe-down quick panel for WiFi / Bluetooth — only when enabled in settings */}
-      {lockscreenSwipeDownEnabled && (lockscreenSwipeDownWifi || lockscreenSwipeDownBt || lockscreenSwipeDownAudio || lockscreenEmergencyEnabled) && (
+      {/* Swipe-down quick panel for WiFi / Bluetooth / Emergency — only when enabled in settings */}
+      {lockscreenSwipeDownEnabled && (lockscreenSwipeDownWifi || lockscreenSwipeDownBt || lockscreenEmergencyEnabled) && (
         <LockscreenQuickPanel
           showWifi={lockscreenSwipeDownWifi}
           showBluetooth={lockscreenSwipeDownBt}
-          showAudio={lockscreenSwipeDownAudio}
+          showAudio={false}
           showEmergency={lockscreenEmergencyEnabled}
         />
       )}

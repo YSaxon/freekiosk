@@ -140,7 +140,18 @@ fi
 
 # ── ensure local.properties has sdk.dir ────────────────────────────────────────
 LOCAL_PROPS="$ANDROID_DIR/local.properties"
+NEEDS_LOCAL_PROPS=false
 if [[ ! -f "$LOCAL_PROPS" ]] || ! grep -q "^sdk.dir" "$LOCAL_PROPS"; then
+  NEEDS_LOCAL_PROPS=true
+else
+  existing_sdk_dir="$(grep "^sdk.dir" "$LOCAL_PROPS" | head -1 | cut -d= -f2-)"
+  if [[ "$existing_sdk_dir" =~ ^/[a-zA-Z]/ ]]; then
+    warn "local.properties uses a Git Bash/MSYS SDK path ($existing_sdk_dir); rewriting for Gradle..."
+    NEEDS_LOCAL_PROPS=true
+  fi
+fi
+
+if [[ "$NEEDS_LOCAL_PROPS" == "true" ]]; then
   # Auto-detect Android SDK
   SDK_CANDIDATES=(
     "${ANDROID_HOME:-}"

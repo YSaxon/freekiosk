@@ -63,6 +63,10 @@
         <intent>
             <action android:name="android.intent.action.DIAL_EMERGENCY" />
         </intent>
+        <intent>
+            <action android:name="com.android.phone.EmergencyDialer.DIAL" />
+        </intent>
+        <package android:name="com.android.phone" />
     </queries>
 
     <application

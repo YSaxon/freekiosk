@@ -62,9 +62,10 @@ interface Props {
   showBluetooth: boolean;
   showAudio: boolean;
   showEmergency: boolean;
+  openSignal?: number;
 }
 
-export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudio, showEmergency }: Props) {
+export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudio, showEmergency, openSignal }: Props) {
   // ── panel open/close ──────────────────────────────────────────────────────
   const [isOpen, setIsOpen] = useState(false);
   const panelY = useRef(new Animated.Value(0)).current;
@@ -104,6 +105,11 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
       friction: 10,
     }).start(() => setIsOpen(false));
   }, [panelY]);
+
+  useEffect(() => {
+    if (openSignal === undefined || openSignal <= 0 || panelHeight === 0) return;
+    open();
+  }, [openSignal, panelHeight, open]);
 
   // ── pan responder ─────────────────────────────────────────────────────────
   const panResponder = useRef(

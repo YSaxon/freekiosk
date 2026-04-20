@@ -37,6 +37,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   const [showBluetoothButton, setShowBluetoothButton] = useState(false);
   const [showAudioControls, setShowAudioControls] = useState(false);
   const [showEmergencyButton, setShowEmergencyButton] = useState(false);
+  const [audioPanelOpenSignal, setAudioPanelOpenSignal] = useState(0);
 
   // Dialog visibility
   const [wifiDialogVisible, setWifiDialogVisible] = useState(false);
@@ -157,7 +158,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const hasQuickControls = showWifiButton || showBluetoothButton || showEmergencyButton;
+  const hasQuickControls = showWifiButton || showBluetoothButton || showAudioControls || showEmergencyButton;
 
   return (
     <View style={styles.container}>
@@ -246,6 +247,16 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
             </TouchableOpacity>
           )}
 
+          {showAudioControls && (
+            <TouchableOpacity
+              style={styles.quickBtn}
+              onPress={() => setAudioPanelOpenSignal((value) => value + 1)}
+            >
+              <Text style={styles.quickBtnIcon}>🔊</Text>
+              <Text style={styles.quickBtnLabel}>Audio</Text>
+            </TouchableOpacity>
+          )}
+
           {showEmergencyButton && (
             <TouchableOpacity
               style={[styles.quickBtn, styles.emergencyBtn]}
@@ -272,6 +283,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
         showBluetooth={false}
         showAudio={showAudioControls}
         showEmergency={false}
+        openSignal={audioPanelOpenSignal}
       />
     </View>
   );

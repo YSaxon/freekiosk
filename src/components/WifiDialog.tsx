@@ -27,6 +27,11 @@ import {
   Platform,
 } from 'react-native';
 import { NativeModules } from 'react-native';
+import {
+  clearSecureWifiPassword,
+  getSecureWifiPassword,
+  saveSecureWifiPassword,
+} from '../utils/secureStorage';
 
 const { WifiControlModule } = NativeModules;
 
@@ -127,8 +132,20 @@ export default function WifiDialog({ visible, onClose }: Props) {
     }
   };
 
-  const handleNetworkTap = (network: WifiNetwork) => {
+  const handleNetworkTap = async (network: WifiNetwork) => {
+    const isCurrentNetwork = wifiInfo?.isConnected && wifiInfo.ssid === network.ssid;
+    if (isCurrentNetwork) {
+      await refresh();
+      return;
+    }
+
     if (network.secured) {
+      const savedPassword = await getSecureWifiPassword(network.ssid);
+      if (savedPassword) {
+        connectTo(network.ssid, savedPassword, true);
+        return;
+      }
+
       setPasswordSsid(network.ssid);
       setPassword('');
     } else {
@@ -136,17 +153,34 @@ export default function WifiDialog({ visible, onClose }: Props) {
     }
   };
 
-  const connectTo = async (ssid: string, pwd: string) => {
+  const connectTo = async (ssid: string, pwd: string, usedSavedPassword = false) => {
     setPasswordSsid(null);
     setConnecting(ssid);
     try {
       const result = await WifiControlModule.connectToNetwork(ssid, pwd);
       if (result.success) {
+        if (pwd) {
+          await saveSecureWifiPassword(ssid, pwd);
+        }
         await refresh();
       } else {
+        if (usedSavedPassword) {
+          await clearSecureWifiPassword(ssid);
+          setPasswordSsid(ssid);
+          setPassword('');
+          Alert.alert('Saved Wi-Fi password failed', `Enter the password for "${ssid}" again.`);
+          return;
+        }
         Alert.alert('Connection failed', `Could not connect to "${ssid}"`);
       }
     } catch (e: any) {
+      if (usedSavedPassword) {
+        await clearSecureWifiPassword(ssid);
+        setPasswordSsid(ssid);
+        setPassword('');
+        Alert.alert('Saved Wi-Fi password failed', e?.message || `Enter the password for "${ssid}" again.`);
+        return;
+      }
       Alert.alert('Connection failed', e?.message || `Could not connect to "${ssid}"`);
     } finally {
       setConnecting(null);
@@ -300,7 +334,7 @@ export default function WifiDialog({ visible, onClose }: Props) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.pwdConnect, !password && styles.pwdConnectDisabled]}
-                  onPress={() => connectTo(passwordSsid!, password)}
+                  onPress={() => connectTo(passwordSsid!, password, false)}
                   disabled={!password}
                 >
                   <Text style={styles.pwdConnectText}>Connect</Text>

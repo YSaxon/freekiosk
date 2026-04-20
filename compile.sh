@@ -195,6 +195,18 @@ EOF
   ok "Added JVM memory settings to gradle.properties"
 fi
 
+ensure_gradle_property() {
+  local key="$1"
+  local value="$2"
+  if [[ ! -f "$GRADLE_PROPS" ]] || ! grep -q "^${key}=" "$GRADLE_PROPS"; then
+    echo "${key}=${value}" >> "$GRADLE_PROPS"
+    ok "Added ${key}=${value} to gradle.properties"
+  fi
+}
+
+ensure_gradle_property "android.useAndroidX" "true"
+ensure_gradle_property "android.enableJetifier" "true"
+
 # ── build ──────────────────────────────────────────────────────────────────────
 GRADLE_TASK="assemble$(tr '[:lower:]' '[:upper:]' <<< "${BUILD_TYPE:0:1}")${BUILD_TYPE:1}"
 info "Building: $GRADLE_TASK"

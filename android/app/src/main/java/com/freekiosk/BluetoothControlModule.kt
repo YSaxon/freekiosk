@@ -1,9 +1,11 @@
 package com.freekiosk
 
 import android.Manifest
+import android.app.admin.DevicePolicyManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.content.ComponentName
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -24,6 +26,7 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
     ReactContextBaseJavaModule(reactContext) {
 
     private var discoveryReceiver: BroadcastReceiver? = null
+    private var bluetoothPairingOriginalLockTaskPackages: Array<String>? = null
 
     override fun getName(): String = "BluetoothControlModule"
 
@@ -261,6 +264,10 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
                 return
             }
 
+            unregisterDiscoveryReceiver()
+            try { adapter.cancelDiscovery() } catch (_: Exception) {}
+            allowBluetoothPairingDialogsInLockTask()
+
             // Listen for bond state changes
             val bondReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
@@ -276,12 +283,14 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
                     val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE)
                     if (bondState == BluetoothDevice.BOND_BONDED) {
                         try { reactContext.unregisterReceiver(this) } catch (_: Exception) {}
+                        restoreBluetoothPairingLockTaskPackages()
                         val result = Arguments.createMap()
                         result.putBoolean("success", true)
                         result.putBoolean("alreadyBonded", false)
                         promise.resolve(result)
                     } else if (bondState == BluetoothDevice.BOND_NONE) {
                         try { reactContext.unregisterReceiver(this) } catch (_: Exception) {}
+                        restoreBluetoothPairingLockTaskPackages()
                         promise.reject("PAIRING_FAILED", "Pairing failed or was rejected")
                     }
                 }
@@ -291,9 +300,11 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
             val initiated = device.createBond()
             if (!initiated) {
                 try { reactContext.unregisterReceiver(bondReceiver) } catch (_: Exception) {}
+                restoreBluetoothPairingLockTaskPackages()
                 promise.reject("BOND_INITIATION_FAILED", "Could not initiate pairing with $address")
             }
         } catch (e: Exception) {
+            restoreBluetoothPairingLockTaskPackages()
             promise.reject("PAIR_ERROR", e.message, e)
         }
     }
@@ -352,6 +363,58 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
         } catch (_: SecurityException) {}
 
         return "Unknown Bluetooth device"
+    }
+
+    private fun allowBluetoothPairingDialogsInLockTask() {
+        try {
+            val dpm = reactContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val admin = ComponentName(reactContext, DeviceAdminReceiver::class.java)
+            if (!dpm.isDeviceOwnerApp(reactContext.packageName)) return
+
+            val currentPackages = dpm.getLockTaskPackages(admin)
+            if (bluetoothPairingOriginalLockTaskPackages == null) {
+                bluetoothPairingOriginalLockTaskPackages = currentPackages
+            }
+
+            val pairingPackages = resolveBluetoothPairingDialogPackages()
+            val updated = (currentPackages.toList() + pairingPackages).distinct()
+            if (updated.toSet() != currentPackages.toSet()) {
+                dpm.setLockTaskPackages(admin, updated.toTypedArray())
+                android.util.Log.d("BluetoothControlModule", "Temporarily whitelisted Bluetooth pairing packages: $pairingPackages")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("BluetoothControlModule", "Could not update lock task whitelist for Bluetooth pairing: ${e.message}")
+        }
+    }
+
+    private fun restoreBluetoothPairingLockTaskPackages() {
+        val original = bluetoothPairingOriginalLockTaskPackages ?: return
+        try {
+            val dpm = reactContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val admin = ComponentName(reactContext, DeviceAdminReceiver::class.java)
+            if (dpm.isDeviceOwnerApp(reactContext.packageName)) {
+                dpm.setLockTaskPackages(admin, original)
+                android.util.Log.d("BluetoothControlModule", "Restored lock task packages after Bluetooth pairing")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("BluetoothControlModule", "Could not restore lock task packages after Bluetooth pairing: ${e.message}")
+        } finally {
+            bluetoothPairingOriginalLockTaskPackages = null
+        }
+    }
+
+    private fun resolveBluetoothPairingDialogPackages(): List<String> {
+        val packages = mutableSetOf("android", "com.android.settings", "com.android.bluetooth")
+        try {
+            val intent = Intent(BluetoothDevice.ACTION_PAIRING_REQUEST).apply {
+                addCategory(Intent.CATEGORY_DEFAULT)
+            }
+            reactContext.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                .forEach { info ->
+                    info.activityInfo?.packageName?.let { packages.add(it) }
+                }
+        } catch (_: Exception) {}
+        return packages.toList()
     }
 
     // Required to suppress RN native module warnings

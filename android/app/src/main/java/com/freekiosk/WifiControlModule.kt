@@ -97,13 +97,20 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
             val wifiManager = reactContext.applicationContext
                 .getSystemService(Context.WIFI_SERVICE) as WifiManager
 
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                // Pre-Android 10: direct toggle works fine
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || isDeviceOwner()) {
+                // Pre-Android 10 allows direct toggles. Device-owner kiosk builds
+                // may also be allowed on newer Android versions, so try it before
+                // falling back to the system-panel path.
                 @Suppress("DEPRECATION")
-                val success = wifiManager.setWifiEnabled(enabled)
+                val success = try {
+                    wifiManager.setWifiEnabled(enabled)
+                } catch (security: SecurityException) {
+                    android.util.Log.w("WifiControlModule", "setWifiEnabled denied: ${security.message}")
+                    false
+                }
                 val result = Arguments.createMap()
                 result.putBoolean("success", success)
-                result.putBoolean("requiresSystemPanel", false)
+                result.putBoolean("requiresSystemPanel", !success && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                 promise.resolve(result)
             } else {
                 // Android 10+: setWifiEnabled() is blocked for non-system apps.
@@ -116,6 +123,15 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
             }
         } catch (e: Exception) {
             promise.reject("WIFI_TOGGLE_ERROR", e.message, e)
+        }
+    }
+
+    private fun isDeviceOwner(): Boolean {
+        return try {
+            val dpm = reactContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            dpm.isDeviceOwnerApp(reactContext.packageName)
+        } catch (_: Exception) {
+            false
         }
     }
 

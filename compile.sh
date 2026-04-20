@@ -158,12 +158,19 @@ if [[ ! -f "$LOCAL_PROPS" ]] || ! grep -q "^sdk.dir" "$LOCAL_PROPS"; then
   done
   [[ -n "$SDK_DIR" ]] || die "Android SDK not found. Set ANDROID_HOME or add sdk.dir to android/local.properties."
 
+  # Gradle running on Windows does not understand Git Bash/MSYS paths like
+  # /c/Users/... in local.properties. Convert them to native Windows paths.
+  SDK_PROPS_DIR="$SDK_DIR"
+  if command -v cygpath >/dev/null 2>&1; then
+    SDK_PROPS_DIR="$(cygpath -w "$SDK_DIR" 2>/dev/null || echo "$SDK_DIR")"
+  fi
+
   # local.properties needs escaped backslashes on Windows
-  sdk_escaped="${SDK_DIR//\\/\\\\}"
+  sdk_escaped="${SDK_PROPS_DIR//\\/\\\\}"
   # Also escape the colon for Windows paths (C: → C\:)
   sdk_escaped="${sdk_escaped/:/\\:}"
   echo "sdk.dir=$sdk_escaped" > "$LOCAL_PROPS"
-  ok "Created local.properties: sdk.dir=$SDK_DIR"
+  ok "Created local.properties: sdk.dir=$SDK_PROPS_DIR"
 fi
 
 # ── gradle.properties: ensure enough heap ─────────────────────────────────────

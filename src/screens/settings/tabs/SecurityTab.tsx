@@ -519,8 +519,7 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
       <SettingsSection title="Lock Screen Controls" icon="cellphone-lock">
         <SettingsInfoBox variant="info">
           <Text style={styles.infoText}>
-            ℹ️ These controls appear on the PIN entry screen (and optionally via a swipe-down panel
-            directly on the kiosk screen) without giving access to Settings or other apps.
+            ℹ️ These controls appear on the PIN entry screen without giving access to Settings or other apps.
           </Text>
         </SettingsInfoBox>
         <View style={styles.divider} />
@@ -548,24 +547,10 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
         <View style={styles.divider} />
         <SettingsSwitch
           label="🔊 Audio controls on lock screen"
-          hint="Show volume, mute, and audio output selector in the swipe-down panel and on the PIN screen."
+          hint="Show mute and audio output selector on the PIN screen."
           value={lockscreenAudioEnabled}
           onValueChange={onLockscreenAudioEnabledChange}
         />
-        <View style={styles.divider} />
-        <SettingsSwitch
-          label="⬇️ Swipe-down quick panel"
-          hint="Show a thin drag handle at the very top of the kiosk screen. Pulling it down reveals the enabled controls without requiring 5 taps or a PIN."
-          value={lockscreenSwipeDownEnabled}
-          onValueChange={onLockscreenSwipeDownEnabledChange}
-        />
-        {lockscreenSwipeDownEnabled && !lockscreenWifiEnabled && !lockscreenBluetoothEnabled && !lockscreenAudioEnabled && (
-          <SettingsInfoBox variant="warning">
-            <Text style={styles.infoText}>
-              ⚠️ Enable at least one control above to have something to show in the swipe-down panel.
-            </Text>
-          </SettingsInfoBox>
-        )}
       </SettingsSection>
 
       {/* Return Mechanism Info - Always visible */}

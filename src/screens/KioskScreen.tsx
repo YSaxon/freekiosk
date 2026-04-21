@@ -65,7 +65,6 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
 
   // External app states
   const [displayMode, setDisplayMode] = useState<'webview' | 'external_app' | 'media_player'>('webview');
-  const displayModeRef = useRef<'webview' | 'external_app' | 'media_player'>('webview');
   const [externalAppPackage, setExternalAppPackage] = useState<string | null>(null);
   const [autoRelaunchApp, setAutoRelaunchApp] = useState<boolean>(true);
   const [appCrashCount, setAppCrashCount] = useState<number>(0);
@@ -1377,7 +1376,6 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       const savedAllowSystemInfo = bool(K.ALLOW_SYSTEM_INFO, false);
 
       setDisplayMode(savedDisplayMode);
-      displayModeRef.current = savedDisplayMode;
       setExternalAppPackage(savedExternalAppPackage);
       setAutoRelaunchApp(savedAutoRelaunchApp);
       setBackButtonMode(savedBackButtonMode);
@@ -2193,13 +2191,11 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     const isVoluntary = event?.voluntary ?? false;
     setIsAppLaunched(false);
 
-    if (isVoluntary || displayModeRef.current !== 'external_app') {
-      OverlayServiceModule.stopOverlayService()
-        .catch(error => console.warn('[KioskScreen] Failed to stop overlay:', error));
-    } else {
-      console.log('[KioskScreen] Keeping OverlayService alive after involuntary external-app return');
-    }
+    // Arrêter l'OverlayService quand on revient sur FreeKiosk
+    OverlayServiceModule.stopOverlayService()
+      .catch(error => console.warn('[KioskScreen] Failed to stop overlay:', error));
 
+    // Si retour volontaire (5 taps), le flag natif est déjà mis par OverlayService
     if (isVoluntary) {
       setAppCrashCount(0);
     }

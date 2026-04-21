@@ -90,10 +90,26 @@ export default function WifiDialog({ visible, onClose }: Props) {
 
   const handleToggleWifi = async () => {
     if (!wifiInfo || togglingWifi) return;
+    const previousInfo = wifiInfo;
+    const nextEnabled = !wifiInfo.isEnabled;
     setTogglingWifi(true);
+    setWifiInfo({
+      ...wifiInfo,
+      isEnabled: nextEnabled,
+      isConnected: nextEnabled ? wifiInfo.isConnected : false,
+      ssid: nextEnabled ? wifiInfo.ssid : '',
+      signalLevel: nextEnabled ? wifiInfo.signalLevel : 0,
+      rssi: nextEnabled ? wifiInfo.rssi : 0,
+    });
+    if (!nextEnabled) {
+      setNetworks([]);
+      setConnecting(null);
+    }
+
     try {
-      const result = await WifiControlModule.setWifiEnabled(!wifiInfo.isEnabled);
+      const result = await WifiControlModule.setWifiEnabled(nextEnabled);
       if (result.requiresSystemPanel) {
+        setWifiInfo(previousInfo);
         // Android 10+: WifiManager.setWifiEnabled() is blocked for non-system apps.
         // We do NOT open the system Settings panel — that would create a potential
         // escape route from kiosk mode. Instead inform the user.
@@ -101,18 +117,28 @@ export default function WifiDialog({ visible, onClose }: Props) {
           'WiFi toggle unavailable',
           'On this Android version, WiFi can only be toggled via the device status bar or by an administrator. Connect to a network below while WiFi is already on.'
         );
+      } else if (result.success === false) {
+        setWifiInfo(previousInfo);
+        Alert.alert('Wi-Fi toggle failed', `Could not turn Wi-Fi ${nextEnabled ? 'on' : 'off'}.`);
       } else {
-        setTimeout(refresh, 800);
+        setTimeout(async () => {
+          await refresh();
+          if (nextEnabled) {
+            handleScan(true);
+          }
+        }, 800);
       }
     } catch (e) {
+      setWifiInfo(previousInfo);
       console.warn('[WifiDialog] toggle error:', e);
+      Alert.alert('Wi-Fi toggle failed', `Could not turn Wi-Fi ${nextEnabled ? 'on' : 'off'}.`);
     } finally {
       setTogglingWifi(false);
     }
   };
 
-  const handleScan = async () => {
-    if (scanning || !wifiInfo?.isEnabled) return;
+  const handleScan = async (force = false) => {
+    if (scanning || (!force && !wifiInfo?.isEnabled)) return;
     setScanning(true);
     setNetworks([]);
     try {
@@ -209,16 +235,13 @@ export default function WifiDialog({ visible, onClose }: Props) {
         {/* Toggle row */}
         <View style={styles.toggleRow}>
           <Text style={styles.toggleLabel}>Wi-Fi</Text>
-          {togglingWifi ? (
-            <ActivityIndicator color="#0066cc" />
-          ) : (
-            <Switch
-              value={wifiInfo?.isEnabled ?? false}
-              onValueChange={handleToggleWifi}
-              trackColor={{ false: '#ccc', true: '#4caf50' }}
-              thumbColor="#fff"
-            />
-          )}
+          <Switch
+            value={wifiInfo?.isEnabled ?? false}
+            onValueChange={handleToggleWifi}
+            disabled={togglingWifi}
+            trackColor={{ false: '#ccc', true: '#4caf50' }}
+            thumbColor="#fff"
+          />
         </View>
 
         {wifiInfo?.isEnabled && (
@@ -236,7 +259,7 @@ export default function WifiDialog({ visible, onClose }: Props) {
             {/* Scan button */}
             <TouchableOpacity
               style={[styles.scanBtn, scanning && styles.scanBtnDisabled]}
-              onPress={handleScan}
+              onPress={() => handleScan()}
               disabled={scanning}
             >
               {scanning ? (

@@ -40,6 +40,7 @@ interface KioskScreenProps {
 
 const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const isFocused = useIsFocused();
+  const isFocusedRef = useRef(isFocused);
   const [url, setUrl] = useState<string>('');
   const [autoReload, setAutoReload] = useState<boolean>(false);
   const [screensaverEnabled, setScreensaverEnabled] = useState(false);
@@ -102,6 +103,14 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [returnTapTimeout, setReturnTapTimeout] = useState<number>(1500);
   const [returnMode, setReturnMode] = useState<string>('tap_anywhere');
   const [returnButtonPosition, setReturnButtonPosition] = useState<string>('bottom-right');
+
+  useEffect(() => {
+    isFocusedRef.current = isFocused;
+    if (!isFocused && appLaunchTimeoutRef.current) {
+      clearTimeout(appLaunchTimeoutRef.current);
+      appLaunchTimeoutRef.current = null;
+    }
+  }, [isFocused]);
   
   // URL Rotation states
   const [urlRotationEnabled, setUrlRotationEnabled] = useState<boolean>(false);
@@ -214,6 +223,11 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         // Without this, the first call clears blockAutoRelaunch, and the
         // second call sees it as false → triggers unwanted relaunch.
         appStateRef.current = nextAppState;
+
+        if (!isFocusedRef.current) {
+          console.log('[KioskScreen] AppState: skipping relaunch (Kiosk screen not focused)');
+          return;
+        }
         
         // If navigateToPin is in progress, skip all relaunch logic
         if (isNavigatingToPinRef.current) {
@@ -276,6 +290,10 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
           if (currentDisplayMode === 'external_app' && currentPackage) {
             console.log('[KioskScreen] Immediate mode: relaunching', currentPackage);
             appLaunchTimeoutRef.current = setTimeout(() => {
+              if (!isFocusedRef.current || isNavigatingToPinRef.current) {
+                console.log('[KioskScreen] Delayed relaunch skipped (Kiosk not focused or PIN navigation active)');
+                return;
+              }
               launchExternalApp(currentPackage);
             }, 300);
           }
@@ -754,6 +772,10 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     } else if (countdownActive && countdownSeconds === 0) {
       // Countdown terminé
       setCountdownActive(false);
+      if (!isFocusedRef.current || isNavigatingToPinRef.current) {
+        console.log('[KioskScreen] Countdown relaunch skipped (Kiosk not focused or PIN navigation active)');
+        return;
+      }
       // Read fresh mode from ref (updated by loadSettings)
       if (externalAppModeRef.current === 'multi') {
         // Multi-app mode: return to grid (never relaunch a specific app)

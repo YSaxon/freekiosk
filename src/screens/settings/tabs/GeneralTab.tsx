@@ -82,6 +82,8 @@ interface GeneralTabProps {
   // Printing (webview only)
   printEnabled: boolean;
   onPrintEnabledChange: (value: boolean) => void;
+  printPaperSize: string;
+  onPrintPaperSizeChange: (value: string) => void;
   
   // URL Rotation (webview only)
   urlRotationEnabled: boolean;
@@ -186,6 +188,8 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
   onPdfViewerEnabledChange,
   printEnabled,
   onPrintEnabledChange,
+  printPaperSize,
+  onPrintPaperSizeChange,
   urlRotationEnabled,
   onUrlRotationEnabledChange,
   urlRotationList,
@@ -912,6 +916,24 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
           />
           
           {printEnabled && (
+            <>
+              <View style={styles.rotationSpacer} />
+              <SettingsRadioGroup
+                label="Default Paper Size"
+                options={[
+                  { value: 'A4',     label: 'A4 (210 × 297 mm)' },
+                  { value: 'A5',     label: 'A5 (148 × 210 mm)' },
+                  { value: 'A3',     label: 'A3 (297 × 420 mm)' },
+                  { value: 'LETTER', label: 'Letter (8.5 × 11 in)' },
+                  { value: 'LEGAL',  label: 'Legal (8.5 × 14 in)' },
+                ]}
+                value={printPaperSize}
+                onValueChange={onPrintPaperSizeChange}
+              />
+            </>
+          )}
+
+          {printEnabled && (
             <SettingsInfoBox variant="info">
               <Text style={styles.infoText}>
                 {'🖨️ Web pages can trigger the Android print dialog via window.print().\n\n'}
@@ -974,6 +996,24 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
         </SettingsSection>
       )}
       
+      {/* Background Apps - WebView mode only */}
+      {displayMode === 'webview' && (
+        <SettingsSection title="Background Apps" icon="apps">
+          <SettingsInfoBox variant="info">
+            <Text style={styles.infoText}>
+              {'📋 Optional: add apps to launch and keep running in the background while the kiosk WebView is displayed.\n\n'}
+              {'Example: keep a music or audio receiver app alive alongside your web dashboard.'}
+            </Text>
+          </SettingsInfoBox>
+          <ManagedAppsSection
+            managedApps={managedApps}
+            onManagedAppsChange={onManagedAppsChange}
+            isDeviceOwner={isDeviceOwner}
+            showHomeScreenToggle={false}
+          />
+        </SettingsSection>
+      )}
+
       {/* Back to Kiosk Button */}
       <SettingsButton
         title="Back to Kiosk"

@@ -82,6 +82,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const appStateRef = useRef(AppState.currentState);
   const appLaunchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isNavigatingToPinRef = useRef<boolean>(false); // Guard to prevent relaunch during 5-tap→PIN navigation
+  const bootAppsLaunchedRef = useRef<boolean>(false); // Boot apps launched once per app session (never on Settings/PIN return)
   const tapCountRef = useRef<number>(0);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
@@ -189,6 +190,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [navState, setNavState] = useState<{ canGoBack: boolean; canGoForward: boolean; title: string }>({ canGoBack: false, canGoForward: false, title: '' });
   const [pdfViewerEnabled, setPdfViewerEnabled] = useState<boolean>(false);
   const [printEnabled, setPrintEnabled] = useState<boolean>(false);
+  const [printPaperSize, setPrintPaperSize] = useState<string>('A4');
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [disableUserZoom, setDisableUserZoom] = useState<boolean>(false);
   const [customUserAgent, setCustomUserAgent] = useState<string>('');
@@ -1528,6 +1530,8 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       // Load Printing setting
       const savedPrintEnabled = bool(K.PRINT_ENABLED, false);
       setPrintEnabled(savedPrintEnabled);
+      const savedPrintPaperSize = str(K.PRINT_PAPER_SIZE) ?? 'A4';
+      setPrintPaperSize(savedPrintPaperSize);
       
       // Load WebView Zoom Level
       const savedZoomLevel = num(K.WEBVIEW_ZOOM_LEVEL, 100);
@@ -1660,17 +1664,48 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         return;
       }
       
-      if (savedDisplayMode === 'external_app') {
-        // Launch managed apps with launchOnBoot=true (both single and multi mode)
+      // Start keep-alive background monitor for any mode that has keepAlive apps configured
+      if (savedDisplayMode === 'webview') {
         try {
-          const bootCount = await AppLauncherModule.launchBootApps();
-          if (bootCount > 0) {
-            console.log(`[KioskScreen] Launched ${bootCount} boot app(s)`);
-            // Give boot apps time to start before launching primary app / showing grid
-            await new Promise<void>(resolve => setTimeout(resolve, 1000));
-          }
+          await AppLauncherModule.startBackgroundMonitor();
+          console.log('[KioskScreen] Background monitor started for webview mode (will auto-stop if no keep-alive apps)');
         } catch (e) {
-          console.warn('[KioskScreen] Failed to launch boot apps:', e);
+          console.warn('[KioskScreen] Failed to start background monitor:', e);
+        }
+      }
+
+      if (savedDisplayMode === 'external_app') {
+        // Launch managed apps with launchOnBoot=true — only once per app session.
+        // Calling this on every loadSettings() (e.g. return from Settings) would
+        // launch boot apps again, bring Velocity to foreground, then bringFreeKioskToFront
+        // would trigger onResume() fast-path → double-launch loop (#launchOnBoot-loop).
+        if (!bootAppsLaunchedRef.current) {
+          bootAppsLaunchedRef.current = true;
+          // Start OverlayService BEFORE launching boot apps so kiosk protection is
+          // active from the moment the boot app appears in foreground — preventing
+          // the user from navigating outside authorized apps during the launch window.
+          // Only for single-app mode; multi-app grid has its own protection.
+          if (savedExternalAppMode === 'single' && savedExternalAppPackage) {
+            try {
+              await OverlayServiceModule.startOverlayService(
+                savedReturnTapCount, savedReturnTapTimeout, savedReturnMode,
+                savedReturnButtonPosition, savedExternalAppPackage,
+                autoRelaunchApp, allowNotifications
+              );
+            } catch (e) {
+              console.warn('[KioskScreen] Failed to pre-start overlay before boot apps:', e);
+            }
+          }
+          try {
+            const bootCount = await AppLauncherModule.launchBootApps();
+            if (bootCount > 0) {
+              console.log(`[KioskScreen] Launched ${bootCount} boot app(s)`);
+              // Give boot apps time to initialize before the primary app is overlaid
+              await new Promise<void>(resolve => setTimeout(resolve, 1000));
+            }
+          } catch (e) {
+            console.warn('[KioskScreen] Failed to launch boot apps:', e);
+          }
         }
 
         // Start keep-alive background monitor if any managed app has keepAlive=true
@@ -2311,6 +2346,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
               urlFilterShowFeedback={urlFilterShowFeedback}
               pdfViewerEnabled={pdfViewerEnabled}
               printEnabled={printEnabled}
+              printPaperSize={printPaperSize}
               zoomLevel={zoomLevel}
               disableUserZoom={disableUserZoom}
               customUserAgent={customUserAgent}

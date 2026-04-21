@@ -192,6 +192,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   
   // Printing state
   const [printEnabled, setPrintEnabled] = useState<boolean>(false);
+  const [printPaperSize, setPrintPaperSize] = useState<string>('A4');
   
   // WebView Zoom Level
   const [zoomLevel, setZoomLevel] = useState<number>(100);
@@ -606,6 +607,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     // Printing setting
     const savedPrintEnabled = await StorageService.getPrintEnabled();
     setPrintEnabled(savedPrintEnabled);
+    const savedPrintPaperSize = await StorageService.getPrintPaperSize();
+    setPrintPaperSize(savedPrintPaperSize);
 
     // Dashboard settings
     const savedDashboardModeEnabled = await StorageService.getDashboardModeEnabled();
@@ -1274,6 +1277,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
 
     // Save Printing setting
     await StorageService.savePrintEnabled(printEnabled);
+    await StorageService.savePrintPaperSize(printPaperSize);
 
     // Save Media Player settings
     if (displayMode === 'media_player') {
@@ -1614,6 +1618,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onPdfViewerEnabledChange={setPdfViewerEnabled}
             printEnabled={printEnabled}
             onPrintEnabledChange={setPrintEnabled}
+            printPaperSize={printPaperSize}
+            onPrintPaperSizeChange={setPrintPaperSize}
             urlRotationEnabled={urlRotationEnabled}
             onUrlRotationEnabledChange={setUrlRotationEnabled}
             urlRotationList={urlRotationList}

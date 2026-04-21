@@ -22,6 +22,8 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private val emergencyDialAction = "android.intent.action.DIAL_EMERGENCY"
+    private val emergencyDialerAction = "com.android.phone.EmergencyDialer.DIAL"
 
     companion object {
         // Store the current instance to allow sending events from MainActivity
@@ -123,7 +125,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
     }
 
     @ReactMethod
-    fun startLockTask(externalAppPackage: String?, allowPowerButton: Boolean, allowNotifications: Boolean, allowSystemInfo: Boolean, promise: Promise) {
+    fun startLockTask(externalAppPackage: String?, allowPowerButton: Boolean, allowNotifications: Boolean, allowSystemInfo: Boolean, allowEmergencyCall: Boolean, promise: Promise) {
         try {
             val activity = reactApplicationContext.currentActivity
             if (activity != null && activity is MainActivity) {
@@ -135,7 +137,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                         if (dpm.isDeviceOwnerApp(reactApplicationContext.packageName)) {
                             // Build whitelist: FreeKiosk + external app + all managed apps
                             val whitelist = mutableListOf(reactApplicationContext.packageName)
-                            
+
                             // Use the passed parameter directly (more reliable than SharedPreferences timing)
                             if (!externalAppPackage.isNullOrEmpty()) {
                                 try {
@@ -146,13 +148,18 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                                     android.util.Log.e("KioskModule", "External app not found: $externalAppPackage")
                                 }
                             }
-                            
+
                             // Add all managed apps to the lock task whitelist
                             whitelist.addAll(getManagedAppPackages())
-                            
+
                             // Add print spooler packages if printing is enabled
                             if (isPrintEnabled()) {
                                 whitelist.addAll(getPrintSpoolerPackages())
+                            }
+
+                            // Whitelist the emergency dialer so the power-screen red button works
+                            if (allowEmergencyCall) {
+                                whitelist.addAll(getEmergencyDialerPackages())
                             }
                             
                             val uniqueWhitelist = whitelist.distinct()
@@ -243,6 +250,24 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
             }
         } catch (e: Exception) {
             promise.reject("ERROR", "Failed to stop lock task: ${e.message}")
+        }
+    }
+
+    @ReactMethod
+    fun launchEmergencyDial(promise: Promise) {
+        try {
+            val activity = reactApplicationContext.currentActivity
+            if (activity == null) {
+                promise.reject("ERROR", "Activity not available")
+                return
+            }
+            ensureEmergencyDialerWhitelisted()
+            val intent = createEmergencyDialIntent()
+            activity.startActivity(intent)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            android.util.Log.e("KioskModule", "Failed to launch emergency dialer: ${e.message}")
+            promise.reject("ERROR", "Failed to launch emergency dialer: ${e.message}")
         }
     }
 
@@ -1066,6 +1091,87 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
             android.util.Log.w("KioskModule", "Could not discover print services: ${e.message}")
         }
         return packages.toList()
+    }
+
+    private fun getEmergencyDialerPackages(): List<String> {
+        val packages = mutableSetOf<String>()
+        val emergencyIntents = listOf(
+            Intent(emergencyDialerAction).addCategory(Intent.CATEGORY_DEFAULT),
+            Intent(emergencyDialAction).addCategory(Intent.CATEGORY_DEFAULT),
+        )
+        try {
+            emergencyIntents.forEach { emergencyIntent ->
+                reactApplicationContext.packageManager.resolveActivity(
+                    emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY
+                )?.activityInfo?.packageName?.let { packages.add(it) }
+
+                reactApplicationContext.packageManager.queryIntentActivities(
+                    emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY
+                ).forEach { info ->
+                    info.activityInfo?.packageName?.let { packages.add(it) }
+                }
+            }
+            packages.add("com.android.phone")
+            android.util.Log.d("KioskModule", "Emergency dialer packages for whitelist: $packages")
+        } catch (e: Exception) {
+            android.util.Log.w("KioskModule", "Could not resolve emergency dialer packages: ${e.message}")
+        }
+        return packages.toList()
+    }
+
+    private fun createEmergencyDialIntent(): Intent {
+        val intent = Intent(emergencyDialerAction).apply {
+            addCategory(Intent.CATEGORY_DEFAULT)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        try {
+            val activityInfo = listOf(
+                Intent(emergencyDialerAction).addCategory(Intent.CATEGORY_DEFAULT),
+                Intent(emergencyDialAction).addCategory(Intent.CATEGORY_DEFAULT),
+            ).asSequence()
+                .flatMap { emergencyIntent ->
+                    reactApplicationContext.packageManager.queryIntentActivities(
+                        emergencyIntent,
+                        PackageManager.MATCH_DEFAULT_ONLY
+                    ).asSequence()
+                }
+                .mapNotNull { it.activityInfo }
+                .firstOrNull()
+
+            if (activityInfo?.packageName != null && activityInfo.name != null) {
+                intent.component = ComponentName(activityInfo.packageName, activityInfo.name)
+                android.util.Log.d(
+                    "KioskModule",
+                    "Launching emergency dialer component: ${activityInfo.packageName}/${activityInfo.name}"
+                )
+            } else {
+                intent.component = ComponentName("com.android.phone", "com.android.phone.EmergencyDialer")
+                android.util.Log.d("KioskModule", "Launching fallback emergency dialer component: com.android.phone/.EmergencyDialer")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("KioskModule", "Could not choose emergency dialer component: ${e.message}")
+            intent.component = ComponentName("com.android.phone", "com.android.phone.EmergencyDialer")
+        }
+        return intent
+    }
+
+    private fun ensureEmergencyDialerWhitelisted() {
+        try {
+            val dpm = reactApplicationContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            if (!dpm.isDeviceOwnerApp(reactApplicationContext.packageName)) return
+
+            val adminComponent = ComponentName(reactApplicationContext, DeviceAdminReceiver::class.java)
+            val currentPackages = dpm.getLockTaskPackages(adminComponent).toMutableSet()
+            val updatedPackages = currentPackages.toMutableSet()
+            updatedPackages.addAll(getEmergencyDialerPackages())
+
+            if (updatedPackages != currentPackages) {
+                dpm.setLockTaskPackages(adminComponent, updatedPackages.toTypedArray())
+                android.util.Log.d("KioskModule", "Updated lock task whitelist for emergency dialer: $updatedPackages")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("KioskModule", "Could not update emergency dialer whitelist: ${e.message}")
+        }
     }
 
     private fun getManagedAppPackages(): List<String> {

@@ -58,6 +58,7 @@ class MainActivity : ReactActivity() {
   
   // Volume change receiver (also handles 5-tap gesture detection)
   private var volumeChangeReceiver: VolumeChangeReceiver? = null
+  private val emergencyDialAction = "android.intent.action.DIAL_EMERGENCY"
 
   // Debounce handler for hideSystemUI to avoid dismissing the power menu (GlobalActions)
   // on devices where onWindowFocusChanged fires rapidly (e.g. TECNO/HiOS on Android 14)
@@ -110,6 +111,12 @@ class MainActivity : ReactActivity() {
       view.setPadding(0, 0, 0, imeInsets.bottom)
       insets
     }
+
+    // Request Bluetooth runtime permissions (Android 12+ / API 31+)
+    requestBluetoothPermissions()
+
+    // Request Android 13+ WiFi scan permission for visible SSID results
+    requestWifiPermissions()
 
     readExternalAppConfig()
     ensureBootReceiverEnabled()
@@ -183,9 +190,30 @@ class MainActivity : ReactActivity() {
   }
 
   private fun requestLocationPermission() {
+    val needed = mutableListOf<String>()
     if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
         != PackageManager.PERMISSION_GRANTED) {
-      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1001)
+      needed.add(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        != PackageManager.PERMISSION_GRANTED) {
+      needed.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+    }
+    if (needed.isEmpty()) return
+
+    if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+      needed.forEach { perm ->
+        try {
+          devicePolicyManager.setPermissionGrantState(
+            adminComponent,
+            packageName,
+            perm,
+            DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+          )
+        } catch (_: Exception) {}
+      }
+    } else {
+      ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1001)
     }
   }
 
@@ -193,6 +221,54 @@ class MainActivity : ReactActivity() {
     if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
         != PackageManager.PERMISSION_GRANTED) {
       ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 1002)
+    }
+  }
+
+  private fun requestBluetoothPermissions() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return  // API 31+ only
+
+    val needed = mutableListOf<String>()
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+        != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.BLUETOOTH_CONNECT)
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN)
+        != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.BLUETOOTH_SCAN)
+    if (needed.isEmpty()) return
+
+    // Device Owner: grant silently without a user-facing dialog
+    val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    val admin = ComponentName(this, DeviceAdminReceiver::class.java)
+    if (dpm.isDeviceOwnerApp(packageName)) {
+      needed.forEach { perm ->
+        try {
+          dpm.setPermissionGrantState(
+            admin,
+            packageName,
+            perm,
+            DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+          )
+        } catch (_: Exception) {}
+      }
+    } else {
+      ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1003)
+    }
+  }
+
+  private fun requestWifiPermissions() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES)
+        == PackageManager.PERMISSION_GRANTED) return
+
+    if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+      try {
+        devicePolicyManager.setPermissionGrantState(
+          adminComponent,
+          packageName,
+          Manifest.permission.NEARBY_WIFI_DEVICES,
+          DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+        )
+      } catch (_: Exception) {}
+    } else {
+      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES), 1004)
     }
   }
 
@@ -247,6 +323,10 @@ class MainActivity : ReactActivity() {
         // Add print spooler packages if printing is enabled
         if (isPrintSettingEnabled()) {
             whitelist.addAll(getPrintSpoolerPackages())
+        }
+
+        if (getAsyncStorageValue("@kiosk_lockscreen_emergency_call_enabled", "false") == "true") {
+          whitelist.addAll(getEmergencyDialerPackages())
         }
         
         val uniqueWhitelist = whitelist.distinct()
@@ -823,6 +903,25 @@ class MainActivity : ReactActivity() {
     } catch (e: Exception) {
       DebugLog.errorProduction("MainActivity", "Error bringing FreeKiosk to front with PIN: ${e.message}")
     }
+  }
+
+  private fun getEmergencyDialerPackages(): List<String> {
+    val packages = mutableSetOf<String>()
+    val emergencyIntent = Intent(emergencyDialAction)
+    try {
+      packageManager.resolveActivity(emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        ?.activityInfo?.packageName
+        ?.let { packages.add(it) }
+
+      packageManager.queryIntentActivities(emergencyIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        .forEach { info ->
+          info.activityInfo?.packageName?.let { packages.add(it) }
+        }
+      DebugLog.d("MainActivity", "Emergency dialer packages for whitelist: $packages")
+    } catch (e: Exception) {
+      DebugLog.errorProduction("MainActivity", "Could not resolve emergency dialer packages: ${e.message}")
+    }
+    return packages.toList()
   }
 
   private fun readExternalAppConfig() {

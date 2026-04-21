@@ -39,6 +39,7 @@ interface KioskScreenProps {
 
 const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const isFocused = useIsFocused();
+  const isFocusedRef = useRef(isFocused);
   const [url, setUrl] = useState<string>('');
   const [autoReload, setAutoReload] = useState<boolean>(false);
   const [screensaverEnabled, setScreensaverEnabled] = useState(false);
@@ -102,6 +103,14 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [returnTapTimeout, setReturnTapTimeout] = useState<number>(1500);
   const [returnMode, setReturnMode] = useState<string>('tap_anywhere');
   const [returnButtonPosition, setReturnButtonPosition] = useState<string>('bottom-right');
+
+  useEffect(() => {
+    isFocusedRef.current = isFocused;
+    if (!isFocused && appLaunchTimeoutRef.current) {
+      clearTimeout(appLaunchTimeoutRef.current);
+      appLaunchTimeoutRef.current = null;
+    }
+  }, [isFocused]);
   
   // URL Rotation states
   const [urlRotationEnabled, setUrlRotationEnabled] = useState<boolean>(false);
@@ -185,6 +194,13 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [disableUserZoom, setDisableUserZoom] = useState<boolean>(false);
   const [customUserAgent, setCustomUserAgent] = useState<string>('');
 
+  // Lock screen quick panel (swipe-down WiFi/BT/audio access)
+  const [lockscreenSwipeDownEnabled, setLockscreenSwipeDownEnabled] = useState<boolean>(false);
+  const [lockscreenSwipeDownWifi, setLockscreenSwipeDownWifi] = useState<boolean>(false);
+  const [lockscreenSwipeDownBt, setLockscreenSwipeDownBt] = useState<boolean>(false);
+  const [lockscreenSwipeDownAudio, setLockscreenSwipeDownAudio] = useState<boolean>(false);
+  const [lockscreenEmergencyEnabled, setLockscreenEmergencyEnabled] = useState<boolean>(false);
+
   // Media Player states
   const [mediaPlayerItems, setMediaPlayerItems] = useState<MediaItem[]>([]);
   const [mediaPlayerAutoPlay, setMediaPlayerAutoPlay] = useState<boolean>(true);
@@ -209,6 +225,11 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         // Without this, the first call clears blockAutoRelaunch, and the
         // second call sees it as false → triggers unwanted relaunch.
         appStateRef.current = nextAppState;
+
+        if (!isFocusedRef.current) {
+          console.log('[KioskScreen] AppState: skipping relaunch (Kiosk screen not focused)');
+          return;
+        }
         
         // If navigateToPin is in progress, skip all relaunch logic
         if (isNavigatingToPinRef.current) {
@@ -271,6 +292,10 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
           if (currentDisplayMode === 'external_app' && currentPackage) {
             console.log('[KioskScreen] Immediate mode: relaunching', currentPackage);
             appLaunchTimeoutRef.current = setTimeout(() => {
+              if (!isFocusedRef.current || isNavigatingToPinRef.current) {
+                console.log('[KioskScreen] Delayed relaunch skipped (Kiosk not focused or PIN navigation active)');
+                return;
+              }
               launchExternalApp(currentPackage);
             }, 300);
           }
@@ -749,6 +774,10 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     } else if (countdownActive && countdownSeconds === 0) {
       // Countdown terminé
       setCountdownActive(false);
+      if (!isFocusedRef.current || isNavigatingToPinRef.current) {
+        console.log('[KioskScreen] Countdown relaunch skipped (Kiosk not focused or PIN navigation active)');
+        return;
+      }
       // Read fresh mode from ref (updated by loadSettings)
       if (externalAppModeRef.current === 'multi') {
         // Multi-app mode: return to grid (never relaunch a specific app)
@@ -1480,6 +1509,18 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       setUrlFilterList(savedUrlFilterList);
       setUrlFilterShowFeedback(savedUrlFilterShowFeedback);
       
+      // Load Lock Screen Quick Panel settings
+      const savedSwipeDownEnabled = bool(K.LOCKSCREEN_SWIPE_DOWN_ENABLED, false);
+      const savedSwipeDownWifi = bool(K.LOCKSCREEN_WIFI_ENABLED, false);
+      const savedSwipeDownBt = bool(K.LOCKSCREEN_BLUETOOTH_ENABLED, false);
+      const savedSwipeDownAudio = bool(K.LOCKSCREEN_AUDIO_ENABLED, false);
+      const savedEmergencyEnabled = bool(K.LOCKSCREEN_EMERGENCY_CALL_ENABLED, false);
+      setLockscreenSwipeDownEnabled(savedSwipeDownEnabled);
+      setLockscreenSwipeDownWifi(savedSwipeDownWifi);
+      setLockscreenSwipeDownBt(savedSwipeDownBt);
+      setLockscreenSwipeDownAudio(savedSwipeDownAudio);
+      setLockscreenEmergencyEnabled(savedEmergencyEnabled);
+
       // Load PDF Viewer setting
       const savedPdfViewerEnabled = bool(K.PDF_VIEWER_ENABLED, false);
       setPdfViewerEnabled(savedPdfViewerEnabled);
@@ -1598,7 +1639,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         try {
           // Pass external app package so it gets added to whitelist
           const packageToWhitelist = savedDisplayMode === 'external_app' && savedExternalAppPackage ? savedExternalAppPackage : undefined;
-          await KioskModule.startLockTask(packageToWhitelist, savedAllowPowerButton, savedAllowNotifications, savedAllowSystemInfo);
+          await KioskModule.startLockTask(packageToWhitelist, savedAllowPowerButton, savedAllowNotifications, savedAllowSystemInfo, savedEmergencyEnabled);
         } catch {
           // Silent fail
         }
@@ -2426,6 +2467,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
           onPress={screenSchedulerWakeOnTouch ? onScreensaverTap : undefined}
         />
       )}
+
     </View>
   );
 };

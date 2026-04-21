@@ -1,7 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  NativeModules,
+} from 'react-native';
 import { verifySecurePin, getLockoutStatus, hasSecurePin } from '../utils/secureStorage';
 import { StorageService } from '../utils/storage';
+import WifiDialog from './WifiDialog';
+import BluetoothDialog from './BluetoothDialog';
+import AudioOutputDialog from './AudioOutputDialog';
+
+const { KioskModule } = NativeModules;
 
 interface PinInputProps {
   onSuccess: () => void;
@@ -18,20 +32,42 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   const [pinMode, setPinMode] = useState<'numeric' | 'alphanumeric'>('numeric');
   const inputRef = useRef<TextInput>(null);
 
+  // Lock screen controls visibility
+  const [showWifiButton, setShowWifiButton] = useState(false);
+  const [showBluetoothButton, setShowBluetoothButton] = useState(false);
+  const [showAudioControls, setShowAudioControls] = useState(false);
+  const [showEmergencyButton, setShowEmergencyButton] = useState(false);
+
+  // Dialog visibility
+  const [wifiDialogVisible, setWifiDialogVisible] = useState(false);
+  const [bluetoothDialogVisible, setBluetoothDialogVisible] = useState(false);
+  const [audioDialogVisible, setAudioDialogVisible] = useState(false);
+
   useEffect(() => {
     checkLockoutStatus();
     checkPinConfiguration();
     loadPinMode();
+    loadLockscreenSettings();
     const interval = setInterval(checkLockoutStatus, 1000);
     return () => {
       clearInterval(interval);
     };
   }, []);
 
-  // Simple and reliable PIN change handler
-  // Uses native secureTextEntry for masking - no manual bullet management
+  const loadLockscreenSettings = async (): Promise<void> => {
+    const [wifi, bt, audio, emergency] = await Promise.all([
+      StorageService.getLockscreenWifiEnabled(),
+      StorageService.getLockscreenBluetoothEnabled(),
+      StorageService.getLockscreenAudioEnabled(),
+      StorageService.getLockscreenEmergencyCallEnabled(),
+    ]);
+    setShowWifiButton(wifi);
+    setShowBluetoothButton(bt);
+    setShowAudioControls(audio);
+    setShowEmergencyButton(emergency);
+  };
+
   const handlePinChange = (text: string): void => {
-    // For numeric mode, filter out non-numeric characters
     if (pinMode === 'numeric') {
       const filtered = text.replace(/[^0-9]/g, '');
       setPin(filtered);
@@ -107,11 +143,22 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
     }
   };
 
+  const handleEmergencyCall = async (): Promise<void> => {
+    try {
+      await KioskModule.launchEmergencyDial();
+    } catch (e) {
+      console.warn('[PinInput] launchEmergencyDial error:', e);
+      Alert.alert('Emergency Call', 'Unable to open the emergency dialer.');
+    }
+  };
+
   const formatTime = (milliseconds: number): string => {
     const minutes = Math.floor(milliseconds / 60000);
     const seconds = Math.floor((milliseconds % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
+
+  const hasQuickControls = showWifiButton || showBluetoothButton || showAudioControls || showEmergencyButton;
 
   return (
     <View style={styles.container}>
@@ -176,6 +223,65 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
           </TouchableOpacity>
         </>
       )}
+
+      {/* Quick controls row — only shown when at least one is enabled in settings */}
+      {hasQuickControls && (
+        <View style={styles.quickControls}>
+          {showWifiButton && (
+            <TouchableOpacity
+              style={styles.quickBtn}
+              onPress={() => setWifiDialogVisible(true)}
+            >
+              <Text style={styles.quickBtnIcon}>📶</Text>
+              <Text style={styles.quickBtnLabel}>Wi-Fi</Text>
+            </TouchableOpacity>
+          )}
+
+          {showBluetoothButton && (
+            <TouchableOpacity
+              style={styles.quickBtn}
+              onPress={() => setBluetoothDialogVisible(true)}
+            >
+              <Text style={styles.quickBtnIcon}>🔵</Text>
+              <Text style={styles.quickBtnLabel}>Bluetooth</Text>
+            </TouchableOpacity>
+          )}
+
+          {showAudioControls && (
+            <TouchableOpacity
+              style={styles.quickBtn}
+              onPress={() => setAudioDialogVisible(true)}
+            >
+              <Text style={styles.quickBtnIcon}>🔊</Text>
+              <Text style={styles.quickBtnLabel}>Audio</Text>
+            </TouchableOpacity>
+          )}
+
+          {showEmergencyButton && (
+            <TouchableOpacity
+              style={[styles.quickBtn, styles.emergencyBtn]}
+              onPress={handleEmergencyCall}
+            >
+              <Text style={styles.quickBtnIcon}>🆘</Text>
+              <Text style={[styles.quickBtnLabel, styles.emergencyLabel]}>911</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Modals — rendered outside the card so they cover the full screen */}
+      <WifiDialog
+        visible={wifiDialogVisible}
+        onClose={() => setWifiDialogVisible(false)}
+      />
+      <BluetoothDialog
+        visible={bluetoothDialogVisible}
+        onClose={() => setBluetoothDialogVisible(false)}
+      />
+      <AudioOutputDialog
+        visible={audioDialogVisible}
+        onClose={() => setAudioDialogVisible(false)}
+      />
     </View>
   );
 };
@@ -280,6 +386,49 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#dc3545',
     fontFamily: 'monospace',
+  },
+  // Quick controls
+  quickControls: {
+    position: 'absolute',
+    bottom: 32,
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: 10,
+    columnGap: 8,
+    paddingHorizontal: 16,
+  },
+  quickBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    elevation: 3,
+    width: 78,
+    minHeight: 72,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  quickBtnIcon: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  quickBtnLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#444',
+    textAlign: 'center',
+  },
+  emergencyBtn: {
+    borderColor: '#dc3545',
+    borderWidth: 2,
+  },
+  emergencyLabel: {
+    color: '#dc3545',
   },
 });
 

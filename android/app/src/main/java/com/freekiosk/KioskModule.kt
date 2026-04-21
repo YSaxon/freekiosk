@@ -114,6 +114,10 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
      * Write @kiosk_enabled directly to AsyncStorage's SQLite database.
      * This ensures the value is persisted BEFORE the activity is destroyed,
      * so the watchdog's next poll cycle (or a system-restart) reads the correct value.
+     *
+     * Also mirrors the value to DE (Device Encrypted) SharedPreferences so that
+     * BootReceiver can honour the setting at LOCKED_BOOT_COMPLETED time, before
+     * CE (user-encrypted) storage is available.
      */
     private fun setKioskEnabledInAsyncStorage(enabled: Boolean) {
         try {
@@ -133,6 +137,16 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
             android.util.Log.d("KioskModule", "@kiosk_enabled set to $enabled in AsyncStorage")
         } catch (e: Exception) {
             android.util.Log.e("KioskModule", "Failed to write @kiosk_enabled: ${e.message}")
+        }
+        // Mirror to DE storage — only Device Owner installations use BootLockActivity,
+        // so the flag is meaningful only for that case. We still write false on any
+        // kiosk disable to ensure the early-boot path is always in sync.
+        try {
+            val dpm = reactApplicationContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val isOwner = dpm.isDeviceOwnerApp(reactApplicationContext.packageName)
+            BootReceiver.updateDeBootFlag(reactApplicationContext, enabled && isOwner)
+        } catch (e: Exception) {
+            android.util.Log.e("KioskModule", "Failed to update DE boot flag: ${e.message}")
         }
     }
 
@@ -199,6 +213,8 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                             dpm.setLockTaskPackages(adminComponent, uniqueWhitelist.toTypedArray())
                             activity.startLockTask()
                             android.util.Log.d("KioskModule", "Full lock task started (Device Owner) with whitelist: $uniqueWhitelist")
+                            // Update DE boot flag so the next LOCKED_BOOT_COMPLETED also locks immediately
+                            BootReceiver.updateDeBootFlag(reactApplicationContext, true)
                             
                             // Safety net: force unmute audio streams after entering lock task
                             // Samsung/OneUI devices may mute audio in LOCK_TASK_MODE_LOCKED

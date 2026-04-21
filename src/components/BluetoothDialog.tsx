@@ -49,6 +49,8 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
   const [discovering, setDiscovering] = useState(false);
   const [togglingBt, setTogglingBt] = useState(false);
   const [pairingAddress, setPairingAddress] = useState<string | null>(null);
+  const [connectingAddress, setConnectingAddress] = useState<string | null>(null);
+  const [disconnectingAddress, setDisconnectingAddress] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -58,6 +60,35 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
       console.warn('[BluetoothDialog] getBluetoothInfo error:', e);
     }
   }, []);
+
+  const updateBondedDeviceConnection = (address: string, connected: boolean) => {
+    setBtInfo((current) => current ? {
+      ...current,
+      bondedDevices: current.bondedDevices.map((device) =>
+        device.address === address ? { ...device, connected } : device
+      ),
+    } : current);
+  };
+
+  const refreshSoon = () => {
+    setTimeout(refresh, 700);
+    setTimeout(refresh, 1800);
+  };
+
+  const waitForBluetoothState = async (enabled: boolean, timeoutMs = 8000) => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      try {
+        const info: BTInfo = await BluetoothControlModule.getBluetoothInfo();
+        setBtInfo(info);
+        if (info.isEnabled === enabled) return true;
+      } catch (e) {
+        console.warn('[BluetoothDialog] state poll error:', e);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    }
+    return false;
+  };
 
   useEffect(() => {
     if (!visible) return;
@@ -83,20 +114,44 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
 
   const handleToggleBt = async () => {
     if (!btInfo || togglingBt) return;
+    const previousInfo = btInfo;
+    const nextEnabled = !btInfo.isEnabled;
     setTogglingBt(true);
+    setBtInfo({
+      ...btInfo,
+      isEnabled: nextEnabled,
+      bondedDevices: nextEnabled ? btInfo.bondedDevices : [],
+    });
+    if (!nextEnabled) {
+      setDiscoveredDevices([]);
+      setPairingAddress(null);
+      setConnectingAddress(null);
+      setDisconnectingAddress(null);
+      setDiscovering(false);
+    }
     try {
-      const result = await BluetoothControlModule.setBluetoothEnabled(!btInfo.isEnabled);
+      const result = await BluetoothControlModule.setBluetoothEnabled(nextEnabled);
       if (result.requiresSystemPanel) {
+        setBtInfo(previousInfo);
         // Do NOT open system Settings panels — that would break kiosk isolation.
         Alert.alert(
           'Bluetooth toggle unavailable',
           'Bluetooth could not be toggled on this device. Please ask an administrator to enable it.'
         );
+      } else if (result.success === false) {
+        const reachedState = await waitForBluetoothState(nextEnabled);
+        if (!reachedState) {
+          setBtInfo(previousInfo);
+          Alert.alert('Bluetooth toggle failed', `Could not turn Bluetooth ${nextEnabled ? 'on' : 'off'}.`);
+        }
       } else {
-        setTimeout(refresh, 800);
+        const reachedState = await waitForBluetoothState(nextEnabled, 5000);
+        if (!reachedState) refreshSoon();
       }
     } catch (e) {
+      setBtInfo(previousInfo);
       console.warn('[BluetoothDialog] toggle error:', e);
+      Alert.alert('Bluetooth toggle failed', `Could not turn Bluetooth ${nextEnabled ? 'on' : 'off'}.`);
     } finally {
       setTogglingBt(false);
     }
@@ -131,6 +186,42 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
     }
   };
 
+  const handleConnect = async (device: BTDevice) => {
+    if (connectingAddress || disconnectingAddress) return;
+    setConnectingAddress(device.address);
+    try {
+      const success = await BluetoothControlModule.connectDevice(device.address);
+      if (!success) {
+        Alert.alert('Connection failed', 'Could not connect to this paired device.');
+      } else {
+        updateBondedDeviceConnection(device.address, true);
+      }
+      refreshSoon();
+    } catch (e: any) {
+      Alert.alert('Connection failed', e?.message ?? 'Could not connect to device');
+    } finally {
+      setConnectingAddress(null);
+    }
+  };
+
+  const handleDisconnect = async (device: BTDevice) => {
+    if (connectingAddress || disconnectingAddress) return;
+    setDisconnectingAddress(device.address);
+    try {
+      const success = await BluetoothControlModule.disconnectDevice(device.address);
+      if (!success) {
+        Alert.alert('Disconnect failed', 'Could not disconnect this device.');
+      } else {
+        updateBondedDeviceConnection(device.address, false);
+      }
+      refreshSoon();
+    } catch (e: any) {
+      Alert.alert('Disconnect failed', e?.message ?? 'Could not disconnect device');
+    } finally {
+      setDisconnectingAddress(null);
+    }
+  };
+
   const rssiToSignal = (rssi?: number) => {
     if (rssi == null) return '?';
     if (rssi >= -55) return '████';
@@ -139,17 +230,37 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
     return '▂___';
   };
 
-  const renderBondedDevice = ({ item }: { item: BTDevice }) => (
-    <View style={[styles.deviceRow, item.connected && styles.deviceRowConnected]}>
-      <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.deviceAddress}>{item.address}</Text>
+  const renderBondedDevice = ({ item }: { item: BTDevice }) => {
+    const isConnecting = connectingAddress === item.address;
+    const isDisconnecting = disconnectingAddress === item.address;
+    const isBusy = isConnecting || isDisconnecting;
+    return (
+      <View style={[styles.deviceRow, item.connected && styles.deviceRowConnected]}>
+        <View style={styles.deviceInfo}>
+          <Text style={styles.deviceName} numberOfLines={1}>{item.name}</Text>
+          <Text style={styles.deviceAddress}>{item.address}</Text>
+        </View>
+        <View style={styles.deviceActions}>
+          <Text style={[styles.deviceStatus, item.connected && styles.deviceStatusConnected]}>
+            {item.connected ? '● Connected' : '○ Paired'}
+          </Text>
+          <TouchableOpacity
+            style={[styles.deviceActionBtn, isBusy && styles.deviceActionBtnDisabled]}
+            onPress={() => item.connected ? handleDisconnect(item) : handleConnect(item)}
+            disabled={isBusy || pairingAddress !== null}
+          >
+            {isBusy ? (
+              <ActivityIndicator color="#1565c0" size="small" />
+            ) : (
+              <Text style={styles.deviceActionBtnText}>
+                {item.connected ? 'Disconnect' : 'Connect'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-      <Text style={[styles.deviceStatus, item.connected && styles.deviceStatusConnected]}>
-        {item.connected ? '● Connected' : '○ Paired'}
-      </Text>
-    </View>
-  );
+    );
+  };
 
   const renderDiscoveredDevice = ({ item }: { item: BTDevice }) => {
     const isPairing = pairingAddress === item.address;
@@ -384,6 +495,29 @@ const styles = StyleSheet.create({
   },
   deviceStatusConnected: {
     color: '#1565c0',
+  },
+  deviceActions: {
+    alignItems: 'flex-end',
+    marginLeft: 12,
+  },
+  deviceActionBtn: {
+    minWidth: 96,
+    minHeight: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#1565c0',
+    borderRadius: 6,
+    marginTop: 6,
+    paddingHorizontal: 10,
+  },
+  deviceActionBtnDisabled: {
+    opacity: 0.6,
+  },
+  deviceActionBtnText: {
+    fontSize: 13,
+    color: '#1565c0',
+    fontWeight: '700',
   },
   pairBtn: {
     fontSize: 15,

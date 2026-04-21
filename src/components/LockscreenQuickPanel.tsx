@@ -255,7 +255,7 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
                   onPress={handleEmergencyCall}
                 >
                   <Text style={styles.iconBtnIcon}>🚨</Text>
-                  <Text style={[styles.iconBtnLabel, styles.emergencyLabel]}>Emergency</Text>
+                  <Text style={[styles.iconBtnLabel, styles.emergencyLabel]}>911</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -309,7 +309,9 @@ export default function LockscreenQuickPanel({ showWifi, showBluetooth, showAudi
           hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
           {...panResponder.panHandlers}
         >
-          <View style={styles.handleBar} />
+          <View style={styles.handleCircle}>
+            <Text style={styles.handleGlyph}>{isOpen ? '⌃' : '⌄'}</Text>
+          </View>
         </TouchableOpacity>
       </Animated.View>
 
@@ -370,18 +372,26 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   handle: {
-    height: HANDLE_HEIGHT,
+    height: HANDLE_HEIGHT + 18,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderBottomLeftRadius: 6,
-    borderBottomRightRadius: 6,
+    backgroundColor: 'transparent',
   },
-  handleBar: {
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+  handleCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  handleGlyph: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 24,
   },
   // ── rows
   row: {

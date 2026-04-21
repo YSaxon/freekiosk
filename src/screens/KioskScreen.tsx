@@ -28,7 +28,6 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import Icon from '../components/Icon';
 import { revokeSettingsAccess } from '../utils/authState';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import LockscreenQuickPanel from '../components/LockscreenQuickPanel';
 
 const { HttpServerModule } = NativeModules;
 
@@ -2433,15 +2432,6 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         />
       )}
 
-      {/* Swipe-down quick panel for WiFi / Bluetooth / Audio / Emergency — only when enabled in settings */}
-      {lockscreenSwipeDownEnabled && (lockscreenSwipeDownWifi || lockscreenSwipeDownBt || lockscreenSwipeDownAudio || lockscreenEmergencyEnabled) && (
-        <LockscreenQuickPanel
-          showWifi={lockscreenSwipeDownWifi}
-          showBluetooth={lockscreenSwipeDownBt}
-          showAudio={lockscreenSwipeDownAudio}
-          showEmergency={lockscreenEmergencyEnabled}
-        />
-      )}
     </View>
   );
 };

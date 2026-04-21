@@ -263,7 +263,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
               onPress={handleEmergencyCall}
             >
               <Text style={styles.quickBtnIcon}>🆘</Text>
-              <Text style={[styles.quickBtnLabel, styles.emergencyLabel]}>Emergency</Text>
+              <Text style={[styles.quickBtnLabel, styles.emergencyLabel]}>911</Text>
             </TouchableOpacity>
           )}
         </View>

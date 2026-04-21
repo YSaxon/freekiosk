@@ -26,6 +26,8 @@ import android.content.IntentFilter
 import android.os.Build
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import android.Manifest
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -99,6 +101,16 @@ class MainActivity : ReactActivity() {
 
     // Request camera permission for motion detection
     requestCameraPermission()
+
+    // Adjust content padding when the soft keyboard appears.
+    // In immersive/kiosk mode adjustResize is ignored, so we listen for IME insets
+    // and manually add bottom padding so WebView form fields stay visible.
+    val contentView = findViewById<View>(android.R.id.content)
+    ViewCompat.setOnApplyWindowInsetsListener(contentView) { view, insets ->
+      val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+      view.setPadding(0, 0, 0, imeInsets.bottom)
+      insets
+    }
 
     // Request Bluetooth runtime permissions (Android 12+ / API 31+)
     requestBluetoothPermissions()
@@ -484,6 +496,15 @@ class MainActivity : ReactActivity() {
       DebugLog.d("MainActivity", "Voluntary return detected (5-tap), will navigate to PIN: $navigateToPin")
     }
 
+    // Fix #overlay-restart: OverlayService.returnToFreeKiosk() sets blockAutoRelaunch=true
+    // BEFORE calling task.moveToFront(), which fires onResume() with the OLD intent
+    // (no voluntaryReturn flag yet). Without this check, onResume() takes the fast path
+    // and relaunches 24Six without starting OverlayService.
+    if (blockAutoRelaunch && !isVoluntaryReturn) {
+      isVoluntaryReturn = true
+      DebugLog.d("MainActivity", "blockAutoRelaunch=true — treating as voluntary return to prevent fast-path relaunch")
+    }
+
     // Fix #106: In external app mode, only stop the overlay on VOLUNTARY returns
     // (e.g. admin 5-tap to access settings). On involuntary returns (system brought
     // FreeKiosk back), keep the overlay running so the foreground monitor can
@@ -517,6 +538,9 @@ class MainActivity : ReactActivity() {
           val launchIntent = packageManager.getLaunchIntentForPackage(targetPkg)
           if (launchIntent != null) {
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // Restart OverlayService BEFORE launching 24Six so the button is present
+            // when the external app comes to the foreground.
+            startOverlayServiceFromNative(targetPkg)
             startActivity(launchIntent)
             // Move FreeKiosk to background so external app stays visible
             Handler(Looper.getMainLooper()).postDelayed({ moveTaskToBack(true) }, 300)
@@ -586,6 +610,46 @@ class MainActivity : ReactActivity() {
       DebugLog.d("MainActivity", "Stopped OverlayService")
     } catch (e: Exception) {
       DebugLog.errorProduction("MainActivity", "Error stopping OverlayService: ${e.message}")
+    }
+  }
+
+  /**
+   * Start OverlayService from native code, reading parameters from AsyncStorage.
+   * Called from onResume() fast path (involuntary return) to ensure the overlay
+   * button is present when the external app is relaunched.
+   *
+   * This is needed because the JS layer (KioskScreen/PinScreen) cannot start the
+   * service reliably from a background context, and the fast path bypasses JS entirely.
+   */
+  private fun startOverlayServiceFromNative(lockedPackage: String) {
+    try {
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+          DebugLog.d("MainActivity", "Overlay permission not granted, skipping startOverlayServiceFromNative")
+          return
+        }
+      }
+
+      val tapCount = getAsyncStorageValue("@kiosk_return_tap_count", "5").toIntOrNull() ?: 5
+      val tapTimeout = getAsyncStorageValue("@kiosk_return_tap_timeout", "1500").toIntOrNull() ?: 1500
+      val returnMode = getAsyncStorageValue("@kiosk_return_mode", "button")
+      val buttonPosition = getAsyncStorageValue("@kiosk_return_button_position", "bottom-right")
+      val autoRelaunch = getAsyncStorageValue("@kiosk_auto_relaunch_app", "true") == "true"
+      val nfcEnabled = getAsyncStorageValue("@kiosk_allow_notifications", "false") == "true"
+
+      val serviceIntent = Intent(this, OverlayService::class.java)
+      serviceIntent.putExtra("REQUIRED_TAPS", tapCount.coerceIn(2, 20))
+      serviceIntent.putExtra("TAP_TIMEOUT", tapTimeout.coerceIn(500, 5000).toLong())
+      serviceIntent.putExtra("RETURN_MODE", returnMode)
+      serviceIntent.putExtra("BUTTON_POSITION", buttonPosition)
+      serviceIntent.putExtra("LOCKED_PACKAGE", lockedPackage)
+      serviceIntent.putExtra("AUTO_RELAUNCH", autoRelaunch)
+      serviceIntent.putExtra("NFC_ENABLED", nfcEnabled)
+
+      startService(serviceIntent)
+      DebugLog.d("MainActivity", "startOverlayServiceFromNative: taps=$tapCount timeout=${tapTimeout}ms mode=$returnMode pos=$buttonPosition pkg=$lockedPackage autoRelaunch=$autoRelaunch")
+    } catch (e: Exception) {
+      DebugLog.errorProduction("MainActivity", "Failed to start OverlayService from native: ${e.message}")
     }
   }
 

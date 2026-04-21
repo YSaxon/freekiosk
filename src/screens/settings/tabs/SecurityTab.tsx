@@ -323,17 +323,17 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
           </>
         )}
         
-        {(displayMode === 'webview' || displayMode === 'media_player') && (
-          <>
-            <View style={styles.divider} />
-            <SettingsSwitch
-              label="🔊 Volume Button Alternative"
-              hint="Also allow pressing Volume Up/Down button multiple times to access settings"
-              value={volumeUp5TapEnabled}
-              onValueChange={onVolumeUp5TapEnabledChange}
-            />
-          </>
-        )}
+        <>
+          <View style={styles.divider} />
+          <SettingsSwitch
+            label="🔊 Volume Button Alternative"
+            hint={displayMode === 'external_app'
+              ? 'Allow pressing Volume Up/Down multiple times to access settings (disabled by default in App mode to avoid accidental triggers during normal volume adjustment)'
+              : 'Also allow pressing Volume Up/Down button multiple times to access settings'}
+            value={volumeUp5TapEnabled}
+            onValueChange={onVolumeUp5TapEnabledChange}
+          />
+        </>
         
         <SettingsInfoBox variant="info">
           <Text style={styles.infoText}>

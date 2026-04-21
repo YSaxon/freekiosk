@@ -44,6 +44,7 @@ class BootLockActivity : Activity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var startTime = 0L
+    private var mainActivityLaunched = false
 
     // ────────────────────────────────────────────────────────────────────
     // Lifecycle
@@ -79,7 +80,10 @@ class BootLockActivity : Activity() {
 
         startTime = System.currentTimeMillis()
 
-        // Now launch MainActivity (React Native) in the background
+        // Now launch MainActivity (React Native) in the background.
+        // At LOCKED_BOOT_COMPLETED time, CE storage may still be locked and MainActivity
+        // (which is NOT directBootAware) may fail to start. We catch that and retry in
+        // the poll loop once CE becomes available.
         launchMainActivity()
 
         // Start polling — once RN is ready the MainActivity will be in the foreground
@@ -144,9 +148,12 @@ class BootLockActivity : Activity() {
                 putExtra("from_boot_lock", true)
             }
             startActivity(intent)
+            mainActivityLaunched = true
             DebugLog.d(TAG, "Launched MainActivity")
         } catch (e: Exception) {
-            DebugLog.errorProduction(TAG, "Failed to launch MainActivity: ${e.message}")
+            // MainActivity is NOT directBootAware; at LOCKED_BOOT_COMPLETED time, Android
+            // will throw because CE storage is still locked. We'll retry in the poll loop.
+            DebugLog.d(TAG, "Failed to launch MainActivity (CE may be locked, will retry): ${e.message}")
         }
     }
 
@@ -183,8 +190,11 @@ class BootLockActivity : Activity() {
     // ────────────────────────────────────────────────────────────────────
 
     private val pollRunnable = object : Runnable {
+        private var pollCount = 0
+
         override fun run() {
             val elapsed = System.currentTimeMillis() - startTime
+            pollCount++
 
             // Safety timeout
             if (elapsed >= MAX_WAIT_MS) {
@@ -198,6 +208,15 @@ class BootLockActivity : Activity() {
                 DebugLog.d(TAG, "MainActivity is ready after ${elapsed}ms — finishing")
                 finish()
                 return
+            }
+
+            // If the initial launchMainActivity() failed (e.g. CE was locked at
+            // LOCKED_BOOT_COMPLETED time), retry every 5 seconds. Once CE unlocks —
+            // which happens either automatically (no lock screen) or when BOOT_COMPLETED
+            // fires — the retry will succeed and MainActivity will load normally.
+            if (!mainActivityLaunched && pollCount % 5 == 0) {
+                DebugLog.d(TAG, "Retrying MainActivity launch (CE storage may now be available, elapsed=${elapsed}ms)")
+                launchMainActivity()
             }
 
             handler.postDelayed(this, POLL_INTERVAL_MS)

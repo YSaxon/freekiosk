@@ -11,27 +11,94 @@ import android.os.Looper
 import android.provider.Settings
 
 class BootReceiver : BroadcastReceiver() {
+
+    companion object {
+        /**
+         * DE (Device Encrypted) SharedPreferences that can be read even before the user
+         * unlocks the device (i.e. at ACTION_LOCKED_BOOT_COMPLETED time).
+         * We persist the kiosk "should fast-boot-lock" flag here so we can honour it
+         * early in the boot sequence without touching CE (user-encrypted) SQLite.
+         *
+         * Written at every BOOT_COMPLETED (after CE is available) and also called from
+         * KioskModule when kiosk/auto-launch settings change at runtime.
+         */
+        const val DE_PREFS_NAME = "kiosk_de_boot_prefs"
+        const val DE_KEY_FAST_BOOT_LOCK = "fast_boot_lock_enabled"
+
+        fun updateDeBootFlag(context: Context, enabled: Boolean) {
+            try {
+                val deCtx = context.createDeviceProtectedStorageContext()
+                deCtx.getSharedPreferences(DE_PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit().putBoolean(DE_KEY_FAST_BOOT_LOCK, enabled).apply()
+                DebugLog.d("BootReceiver", "DE boot flag updated: $enabled")
+            } catch (e: Exception) {
+                DebugLog.errorProduction("BootReceiver", "Failed to update DE boot flag: ${e.message}")
+            }
+        }
+
+        fun readDeBootFlag(context: Context): Boolean {
+            return try {
+                val deCtx = context.createDeviceProtectedStorageContext()
+                deCtx.getSharedPreferences(DE_PREFS_NAME, Context.MODE_PRIVATE)
+                    .getBoolean(DE_KEY_FAST_BOOT_LOCK, false)
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
             intent.action == "android.intent.action.QUICKBOOT_POWERON" ||
             intent.action == "android.intent.action.REBOOT" ||
             intent.action == Intent.ACTION_LOCKED_BOOT_COMPLETED) {
-            
+
             DebugLog.d("BootReceiver", "Boot detected: ${intent.action}")
-            
+
+            // ── LOCKED_BOOT_COMPLETED: CE (user-encrypted) storage is NOT yet available ──
+            // Any read from RKStorage (SQLite) will fail and return its safe default (false).
+            // We instead read the DE SharedPreferences flag that was saved on the previous
+            // BOOT_COMPLETED and is still readable because DE storage is always unlocked.
+            if (intent.action == Intent.ACTION_LOCKED_BOOT_COMPLETED) {
+                if (readDeBootFlag(context)) {
+                    DebugLog.d("BootReceiver", "LOCKED_BOOT: DE flag=true — launching BootLockActivity immediately")
+                    try {
+                        val lockIntent = Intent(context, BootLockActivity::class.java)
+                        lockIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(lockIntent)
+                    } catch (e: Exception) {
+                        DebugLog.errorProduction("BootReceiver", "BootLockActivity failed at LOCKED_BOOT: ${e.message}")
+                    }
+                } else {
+                    DebugLog.d("BootReceiver", "LOCKED_BOOT: DE flag=false — skipping BootLockActivity")
+                }
+                // Do NOT start services yet — their SQLite reads also need CE storage.
+                return
+            }
+
+            // ── From here: BOOT_COMPLETED / QUICKBOOT / REBOOT — CE storage is available ──
+
             // Re-enable accessibility service if Device Owner (includes managed apps whitelist)
             reEnableAccessibilityIfDeviceOwner(context)
-            
+
             // Check if auto-launch is enabled before doing anything else
             if (!isAutoLaunchEnabled(context)) {
                 DebugLog.d("BootReceiver", "Auto-launch is disabled, not starting app")
+                // Update DE flag so next LOCKED_BOOT_COMPLETED also respects the setting
+                updateDeBootFlag(context, false)
                 return
             }
+
+            // Persist current "fast boot lock" eligibility to DE storage for next boot
+            val fastLock = shouldUseFastBootLock(context)
+            updateDeBootFlag(context, fastLock)
 
             // ── #98 fix: launch BootLockActivity IMMEDIATELY if Device Owner + kiosk ──
             // This locks the device in < 1 second, before React Native loads.
             // BootLockActivity will then launch MainActivity itself.
-            if (shouldUseFastBootLock(context)) {
+            // If BootLockActivity was already started by LOCKED_BOOT_COMPLETED, it is
+            // singleTask and will simply receive onNewIntent and continue its poll loop.
+            if (fastLock) {
                 DebugLog.d("BootReceiver", "Fast boot-lock: launching BootLockActivity")
                 try {
                     val lockIntent = Intent(context, BootLockActivity::class.java)
@@ -96,25 +163,28 @@ class BootReceiver : BroadcastReceiver() {
     private fun launchMainActivityLegacy(context: Context) {
         Handler(Looper.getMainLooper()).postDelayed({
             DebugLog.d("BootReceiver", "Legacy path: launching MainActivity")
-            
-            // Launch background apps (launchOnBoot=true) before launching FreeKiosk
-            launchBackgroundApps(context)
-            
-            // Give boot apps a moment to initialize before FreeKiosk takes foreground
-            Thread.sleep(1000)
-            
-            // Launch the app on startup (FreeKiosk will be on top)
-            val launchIntent = Intent(context, MainActivity::class.java)
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            
-            try {
-                context.startActivity(launchIntent)
-                DebugLog.d("BootReceiver", "Successfully launched MainActivity")
-            } catch (e: Exception) {
-                DebugLog.errorProduction("BootReceiver", "Failed to launch app: ${e.message}")
-            }
+
+            // Launch background apps on a worker thread — launchBackgroundApps() uses
+            // Thread.sleep() between apps, which must not run on the main looper.
+            // MainActivity is launched 1 s later via a nested postDelayed so the main
+            // thread stays unblocked throughout (no ANR risk on Android 14+ devices).
+            val mainHandler = Handler(Looper.getMainLooper())
+            Thread {
+                launchBackgroundApps(context)
+                mainHandler.postDelayed({
+                    val launchIntent = Intent(context, MainActivity::class.java)
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+                    try {
+                        context.startActivity(launchIntent)
+                        DebugLog.d("BootReceiver", "Successfully launched MainActivity")
+                    } catch (e: Exception) {
+                        DebugLog.errorProduction("BootReceiver", "Failed to launch app: ${e.message}")
+                    }
+                }, 1000)
+            }.start()
         }, 3000) // 3 second delay to ensure system is ready
     }
 

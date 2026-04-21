@@ -65,6 +65,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
 
   // External app states
   const [displayMode, setDisplayMode] = useState<'webview' | 'external_app' | 'media_player'>('webview');
+  const displayModeRef = useRef<'webview' | 'external_app' | 'media_player'>('webview');
   const [externalAppPackage, setExternalAppPackage] = useState<string | null>(null);
   const [autoRelaunchApp, setAutoRelaunchApp] = useState<boolean>(true);
   const [appCrashCount, setAppCrashCount] = useState<number>(0);
@@ -81,6 +82,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const appStateRef = useRef(AppState.currentState);
   const appLaunchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isNavigatingToPinRef = useRef<boolean>(false); // Guard to prevent relaunch during 5-tap→PIN navigation
+  const bootAppsLaunchedRef = useRef<boolean>(false); // Boot apps launched once per app session (never on Settings/PIN return)
   const tapCountRef = useRef<number>(0);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
@@ -188,7 +190,9 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [navState, setNavState] = useState<{ canGoBack: boolean; canGoForward: boolean; title: string }>({ canGoBack: false, canGoForward: false, title: '' });
   const [pdfViewerEnabled, setPdfViewerEnabled] = useState<boolean>(false);
   const [printEnabled, setPrintEnabled] = useState<boolean>(false);
+  const [printPaperSize, setPrintPaperSize] = useState<string>('A4');
   const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [disableUserZoom, setDisableUserZoom] = useState<boolean>(false);
   const [customUserAgent, setCustomUserAgent] = useState<string>('');
 
   // Lock screen quick panel (swipe-down WiFi/BT/audio access)
@@ -806,12 +810,13 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         await AsyncStorage.getItem('__force_init__');
       } catch (e) {}
       
-      await loadSettings();
-      
-      // Clear navigating-to-pin guard AFTER loadSettings completes.
-      // This ensures the guard is available during loadSettings execution
-      // to prevent external app relaunch during 5-tap→PIN navigation.
+      // Clear navigating-to-pin guard BEFORE loadSettings so that returning from
+      // PIN/Settings causes loadSettings to proceed with the external app launch.
+      // The guard's purpose (preventing a duplicate launch mid-5-tap-flow) is already
+      // served: by the time KioskScreen gains focus again, the PIN flow is complete.
       isNavigatingToPinRef.current = false;
+
+      await loadSettings();
       
       // Reload blocking overlays to ensure they stay active when returning from settings
       try {
@@ -1372,6 +1377,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       const savedAllowSystemInfo = bool(K.ALLOW_SYSTEM_INFO, false);
 
       setDisplayMode(savedDisplayMode);
+      displayModeRef.current = savedDisplayMode;
       setExternalAppPackage(savedExternalAppPackage);
       setAutoRelaunchApp(savedAutoRelaunchApp);
       setBackButtonMode(savedBackButtonMode);
@@ -1473,7 +1479,16 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       } catch (error) {
         console.error('[KioskScreen] Error setting keep screen on:', error);
       }
-      
+
+      // Load Auto Wake on Screen Off setting
+      const savedAutoWakeOnScreenOff = bool(K.AUTO_WAKE_ON_SCREEN_OFF, false);
+      try {
+        await KioskModule.setAutoWakeOnScreenOff(savedAutoWakeOnScreenOff);
+        console.log('[KioskScreen] Auto wake on screen off:', savedAutoWakeOnScreenOff);
+      } catch (error) {
+        console.error('[KioskScreen] Error setting auto wake on screen off:', error);
+      }
+
       // Load Inactivity Return to Home settings
       const savedInactivityReturnEnabled = bool(K.INACTIVITY_RETURN_ENABLED, false);
       const savedInactivityReturnDelay = num(K.INACTIVITY_RETURN_DELAY, 60000);
@@ -1515,11 +1530,17 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       // Load Printing setting
       const savedPrintEnabled = bool(K.PRINT_ENABLED, false);
       setPrintEnabled(savedPrintEnabled);
+      const savedPrintPaperSize = str(K.PRINT_PAPER_SIZE) ?? 'A4';
+      setPrintPaperSize(savedPrintPaperSize);
       
       // Load WebView Zoom Level
       const savedZoomLevel = num(K.WEBVIEW_ZOOM_LEVEL, 100);
       setZoomLevel(savedZoomLevel);
-      
+
+      // Load Disable User Zoom
+      const savedDisableUserZoom = bool(K.DISABLE_USER_ZOOM, false);
+      setDisableUserZoom(savedDisableUserZoom);
+
       // Load Custom User Agent
       const savedCustomUserAgent = str(K.CUSTOM_USER_AGENT) ?? '';
       setCustomUserAgent(savedCustomUserAgent);
@@ -1643,17 +1664,48 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         return;
       }
       
-      if (savedDisplayMode === 'external_app') {
-        // Launch managed apps with launchOnBoot=true (both single and multi mode)
+      // Start keep-alive background monitor for any mode that has keepAlive apps configured
+      if (savedDisplayMode === 'webview') {
         try {
-          const bootCount = await AppLauncherModule.launchBootApps();
-          if (bootCount > 0) {
-            console.log(`[KioskScreen] Launched ${bootCount} boot app(s)`);
-            // Give boot apps time to start before launching primary app / showing grid
-            await new Promise<void>(resolve => setTimeout(resolve, 1000));
-          }
+          await AppLauncherModule.startBackgroundMonitor();
+          console.log('[KioskScreen] Background monitor started for webview mode (will auto-stop if no keep-alive apps)');
         } catch (e) {
-          console.warn('[KioskScreen] Failed to launch boot apps:', e);
+          console.warn('[KioskScreen] Failed to start background monitor:', e);
+        }
+      }
+
+      if (savedDisplayMode === 'external_app') {
+        // Launch managed apps with launchOnBoot=true — only once per app session.
+        // Calling this on every loadSettings() (e.g. return from Settings) would
+        // launch boot apps again, bring Velocity to foreground, then bringFreeKioskToFront
+        // would trigger onResume() fast-path → double-launch loop (#launchOnBoot-loop).
+        if (!bootAppsLaunchedRef.current) {
+          bootAppsLaunchedRef.current = true;
+          // Start OverlayService BEFORE launching boot apps so kiosk protection is
+          // active from the moment the boot app appears in foreground — preventing
+          // the user from navigating outside authorized apps during the launch window.
+          // Only for single-app mode; multi-app grid has its own protection.
+          if (savedExternalAppMode === 'single' && savedExternalAppPackage) {
+            try {
+              await OverlayServiceModule.startOverlayService(
+                savedReturnTapCount, savedReturnTapTimeout, savedReturnMode,
+                savedReturnButtonPosition, savedExternalAppPackage,
+                autoRelaunchApp, allowNotifications
+              );
+            } catch (e) {
+              console.warn('[KioskScreen] Failed to pre-start overlay before boot apps:', e);
+            }
+          }
+          try {
+            const bootCount = await AppLauncherModule.launchBootApps();
+            if (bootCount > 0) {
+              console.log(`[KioskScreen] Launched ${bootCount} boot app(s)`);
+              // Give boot apps time to initialize before the primary app is overlaid
+              await new Promise<void>(resolve => setTimeout(resolve, 1000));
+            }
+          } catch (e) {
+            console.warn('[KioskScreen] Failed to launch boot apps:', e);
+          }
         }
 
         // Start keep-alive background monitor if any managed app has keepAlive=true
@@ -1697,9 +1749,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
           console.log('[KioskScreen] Launching external app:', savedExternalAppPackage);
           await launchExternalApp(savedExternalAppPackage, savedReturnTapCount, savedReturnTapTimeout, savedReturnMode, savedReturnButtonPosition);
         } else if (savedExternalAppMode === 'multi') {
-          // Multi-app mode: don't auto-launch, the grid will be displayed by ExternalAppOverlay
-          console.log('[KioskScreen] Multi-app mode: showing app grid (no auto-launch)');
-          // Still sync overlay settings for when user launches an app from grid
+          // Multi-app mode: sync overlay settings for when user launches an app from grid
           const savedTestMode = bool(K.EXTERNAL_APP_TEST_MODE, true);
           const savedBackBtnMode = str(K.BACK_BUTTON_MODE) || 'test';
           try {
@@ -1707,6 +1757,24 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
             await OverlayServiceModule.setBackButtonMode(savedBackBtnMode);
           } catch (e) {
             console.warn('[KioskScreen] Failed to sync overlay settings for multi-app:', e);
+          }
+
+          // If only one app is visible on the home screen, skip the grid and automatically launch it
+          const homeScreenApps = savedManagedApps.filter(app => app.showOnHomeScreen);
+          if (homeScreenApps.length === 1) {
+            const soleApp = homeScreenApps[0];
+            console.log('[KioskScreen] Multi-app mode with single home screen app - launching:', soleApp.packageName);
+            const blockBeforeLaunch = await KioskModule.shouldBlockAutoRelaunch();
+            if (blockBeforeLaunch || isNavigatingToPinRef.current) {
+              console.log('[KioskScreen] Skipping auto-launch (blockAutoRelaunch=' + blockBeforeLaunch + ', navigatingToPin=' + isNavigatingToPinRef.current + ')');
+              if (blockBeforeLaunch) {
+                await KioskModule.clearBlockAutoRelaunch();
+              }
+              return;
+            }
+            await launchExternalApp(soleApp.packageName, savedReturnTapCount, savedReturnTapTimeout, savedReturnMode, savedReturnButtonPosition);
+          } else {
+            console.log('[KioskScreen] Multi-app mode: showing app grid (' + homeScreenApps.length + ' apps)');
           }
         }
       } else {
@@ -2125,11 +2193,13 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     const isVoluntary = event?.voluntary ?? false;
     setIsAppLaunched(false);
 
-    // Arrêter l'OverlayService quand on revient sur FreeKiosk
-    OverlayServiceModule.stopOverlayService()
-      .catch(error => console.warn('[KioskScreen] Failed to stop overlay:', error));
+    if (isVoluntary || displayModeRef.current !== 'external_app') {
+      OverlayServiceModule.stopOverlayService()
+        .catch(error => console.warn('[KioskScreen] Failed to stop overlay:', error));
+    } else {
+      console.log('[KioskScreen] Keeping OverlayService alive after involuntary external-app return');
+    }
 
-    // Si retour volontaire (5 taps), le flag natif est déjà mis par OverlayService
     if (isVoluntary) {
       setAppCrashCount(0);
     }
@@ -2155,8 +2225,14 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const handleReturnToExternalApp = async (): Promise<void> => {
     // Read fresh mode from ref (most up-to-date)
     if (externalAppModeRef.current === 'multi') {
-      // Multi-app mode: return to the app grid
-      setIsAppLaunched(false);
+      // Multi-app mode: if only one home screen app, re-launch it directly
+      const homeScreenApps = managedApps.filter(app => app.showOnHomeScreen);
+      if (homeScreenApps.length === 1) {
+        await launchExternalApp(homeScreenApps[0].packageName);
+      } else {
+        // Multiple apps: return to the app grid
+        setIsAppLaunched(false);
+      }
     } else {
       // Single-app mode: read current package from storage (avoid stale state)
       const currentPkg = await StorageService.getExternalAppPackage();
@@ -2270,7 +2346,9 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
               urlFilterShowFeedback={urlFilterShowFeedback}
               pdfViewerEnabled={pdfViewerEnabled}
               printEnabled={printEnabled}
+              printPaperSize={printPaperSize}
               zoomLevel={zoomLevel}
+              disableUserZoom={disableUserZoom}
               customUserAgent={customUserAgent}
             />
           )}

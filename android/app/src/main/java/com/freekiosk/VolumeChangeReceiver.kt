@@ -53,9 +53,11 @@ class VolumeChangeReceiver : BroadcastReceiver() {
     }
     
     private fun checkVolume5Tap(context: Context, currentVolume: Int) {
-        // Check if feature is enabled
+        // Check if feature is enabled — user-controlled toggle, same default for all modes.
+        // In App mode this can cause accidental triggers during normal volume adjustment;
+        // the toggle is visible in all modes so users can disable it explicitly.
         val volumeUp5TapEnabled = getAsyncStorageValue(context, "@kiosk_volume_up_5tap_enabled", "true") == "true"
-        
+
         if (!volumeUp5TapEnabled) {
             Log.d(TAG, "Volume N-tap feature is disabled")
             lastVolume = currentVolume

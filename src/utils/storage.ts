@@ -89,6 +89,8 @@ const KEYS = {
   SCREEN_SCHEDULER_WAKE_ON_TOUCH: '@kiosk_screen_scheduler_wake_on_touch',
   // Keep Screen On (FLAG_KEEP_SCREEN_ON)
   KEEP_SCREEN_ON: '@kiosk_keep_screen_on',
+  // Auto Wake on Screen Off
+  AUTO_WAKE_ON_SCREEN_OFF: '@kiosk_auto_wake_on_screen_off',
   // Inactivity Return to Home
   INACTIVITY_RETURN_ENABLED: '@kiosk_inactivity_return_enabled',
   INACTIVITY_RETURN_DELAY: '@kiosk_inactivity_return_delay',
@@ -104,8 +106,11 @@ const KEYS = {
   PDF_VIEWER_ENABLED: '@kiosk_pdf_viewer_enabled',
   // Printing
   PRINT_ENABLED: '@kiosk_print_enabled',
+  PRINT_PAPER_SIZE: '@kiosk_print_paper_size',
   // WebView Zoom Level
   WEBVIEW_ZOOM_LEVEL: '@kiosk_webview_zoom_level',
+  // Disable User Zoom (pinch-to-zoom)
+  DISABLE_USER_ZOOM: '@kiosk_disable_user_zoom',
   // Custom User Agent
   CUSTOM_USER_AGENT: '@kiosk_custom_user_agent',
   // MQTT (Home Assistant integration)
@@ -335,6 +340,8 @@ export const StorageService = {
         KEYS.SCREEN_SCHEDULER_WAKE_ON_TOUCH,
         // Keep Screen On
         KEYS.KEEP_SCREEN_ON,
+        // Auto Wake on Screen Off
+        KEYS.AUTO_WAKE_ON_SCREEN_OFF,
         // Inactivity Return to Home
         KEYS.INACTIVITY_RETURN_ENABLED,
         KEYS.INACTIVITY_RETURN_DELAY,
@@ -1695,6 +1702,26 @@ export const StorageService = {
     }
   },
 
+  // ============ AUTO WAKE ON SCREEN OFF ============
+
+  saveAutoWakeOnScreenOff: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.AUTO_WAKE_ON_SCREEN_OFF, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving auto wake on screen off:', error);
+    }
+  },
+
+  getAutoWakeOnScreenOff: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.AUTO_WAKE_ON_SCREEN_OFF);
+      return value !== null ? JSON.parse(value) : false; // Default: OFF
+    } catch (error) {
+      console.error('Error getting auto wake on screen off:', error);
+      return false;
+    }
+  },
+
   // ============ INACTIVITY RETURN TO HOME ============
 
   saveInactivityReturnEnabled: async (value: boolean): Promise<void> => {
@@ -1901,6 +1928,24 @@ export const StorageService = {
     }
   },
 
+  savePrintPaperSize: async (value: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.PRINT_PAPER_SIZE, value);
+    } catch (error) {
+      console.error('Error saving print paper size:', error);
+    }
+  },
+
+  getPrintPaperSize: async (): Promise<string> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.PRINT_PAPER_SIZE);
+      return value || 'A4';
+    } catch (error) {
+      console.error('Error getting print paper size:', error);
+      return 'A4';
+    }
+  },
+
   // ============ WebView Zoom Level ============
 
   saveWebViewZoomLevel: async (value: number): Promise<void> => {
@@ -1918,6 +1963,26 @@ export const StorageService = {
     } catch (error) {
       console.error('Error getting WebView zoom level:', error);
       return 100;
+    }
+  },
+
+  // ============ Disable User Zoom ============
+
+  saveDisableUserZoom: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.DISABLE_USER_ZOOM, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving disable user zoom:', error);
+    }
+  },
+
+  getDisableUserZoom: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.DISABLE_USER_ZOOM);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting disable user zoom:', error);
+      return false;
     }
   },
 

@@ -5,6 +5,7 @@ import android.app.admin.DevicePolicyManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.ComponentName
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -12,6 +13,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
@@ -21,6 +24,8 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class BluetoothControlModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -326,6 +331,118 @@ class BluetoothControlModule(private val reactContext: ReactApplicationContext) 
             promise.resolve(result)
         } catch (e: Exception) {
             promise.reject("UNPAIR_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun disconnectDevice(address: String, promise: Promise) {
+        changeProfileConnection(address, "disconnect", promise)
+    }
+
+    @ReactMethod
+    fun connectDevice(address: String, promise: Promise) {
+        changeProfileConnection(address, "connect", promise)
+    }
+
+    private fun changeProfileConnection(address: String, methodName: String, promise: Promise) {
+        try {
+            val adapter = getAdapter() ?: run {
+                promise.reject("BT_NOT_SUPPORTED", "Bluetooth not supported")
+                return
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val granted = ContextCompat.checkSelfPermission(
+                    reactContext, Manifest.permission.BLUETOOTH_CONNECT
+                ) == PackageManager.PERMISSION_GRANTED
+                if (!granted) {
+                    promise.reject("PERMISSION_DENIED", "BLUETOOTH_CONNECT permission not granted")
+                    return
+                }
+            }
+
+            val device = adapter.getRemoteDevice(address) ?: run {
+                promise.reject("DEVICE_NOT_FOUND", "No device with address $address")
+                return
+            }
+
+            val connected = try {
+                val method = device.javaClass.getMethod("isConnected")
+                method.invoke(device) as? Boolean ?: false
+            } catch (_: Exception) { false }
+
+            if ((methodName == "connect" && connected) || (methodName == "disconnect" && !connected)) {
+                promise.resolve(true)
+                return
+            }
+
+            val profiles = mutableListOf(
+                BluetoothProfile.HEADSET,
+                BluetoothProfile.A2DP
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                profiles.add(BluetoothProfile.HEARING_AID)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                profiles.add(BluetoothProfile.LE_AUDIO)
+            }
+
+            val handler = Handler(Looper.getMainLooper())
+            val pending = AtomicInteger(profiles.size)
+            val resolved = AtomicBoolean(false)
+            val methodInvoked = AtomicBoolean(false)
+            val methodSucceeded = AtomicBoolean(false)
+
+            fun finishIfDone() {
+                if (pending.get() <= 0 && resolved.compareAndSet(false, true)) {
+                    promise.resolve(methodSucceeded.get() || methodInvoked.get())
+                }
+            }
+
+            val timeout = Runnable {
+                if (resolved.compareAndSet(false, true)) {
+                    promise.resolve(methodSucceeded.get() || methodInvoked.get())
+                }
+            }
+            handler.postDelayed(timeout, 2500)
+
+            profiles.forEach { profile ->
+                val listener = object : BluetoothProfile.ServiceListener {
+                    override fun onServiceConnected(profileId: Int, proxy: BluetoothProfile) {
+                        try {
+                            val method = proxy.javaClass.getMethod(methodName, BluetoothDevice::class.java)
+                            val result = method.invoke(proxy, device) as? Boolean ?: false
+                            methodInvoked.set(true)
+                            if (result) methodSucceeded.set(true)
+                        } catch (e: Exception) {
+                            android.util.Log.w("BluetoothControlModule", "Could not $methodName profile $profileId: ${e.message}")
+                        } finally {
+                            try { adapter.closeProfileProxy(profileId, proxy) } catch (_: Exception) {}
+                            pending.decrementAndGet()
+                            finishIfDone()
+                        }
+                    }
+
+                    override fun onServiceDisconnected(profileId: Int) {
+                        pending.decrementAndGet()
+                        finishIfDone()
+                    }
+                }
+
+                val requested = try {
+                    adapter.getProfileProxy(reactContext, listener, profile)
+                } catch (e: Exception) {
+                    android.util.Log.w("BluetoothControlModule", "Could not request profile $profile proxy: ${e.message}")
+                    false
+                }
+
+                if (!requested) {
+                    pending.decrementAndGet()
+                    finishIfDone()
+                }
+            }
+        } catch (e: Exception) {
+            promise.reject("${methodName.uppercase()}_ERROR", e.message, e)
         }
     }
 

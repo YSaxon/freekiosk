@@ -11,7 +11,7 @@
  * Settings app), which is the only safe option on those versions.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Modal,
   View,
@@ -67,6 +67,10 @@ export default function WifiDialog({ visible, onClose }: Props) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [togglingWifi, setTogglingWifi] = useState(false);
+  const [disconnectingWifi, setDisconnectingWifi] = useState(false);
+  const wifiInfoRef = useRef<WifiInfo | null>(null);
+  const connectingRef = useRef<string | null>(null);
+  const autoConnectingSsidRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -78,12 +82,21 @@ export default function WifiDialog({ visible, onClose }: Props) {
   }, []);
 
   useEffect(() => {
+    wifiInfoRef.current = wifiInfo;
+  }, [wifiInfo]);
+
+  useEffect(() => {
+    connectingRef.current = connecting;
+  }, [connecting]);
+
+  useEffect(() => {
     if (!visible) return;
     refresh();
 
     const sub = DeviceEventEmitter.addListener('wifiScanResults', (results: WifiNetwork[]) => {
       setNetworks(results);
       setScanning(false);
+      void autoConnectKnownNetwork(results);
     });
     return () => sub.remove();
   }, [visible, refresh]);
@@ -182,6 +195,7 @@ export default function WifiDialog({ visible, onClose }: Props) {
   const connectTo = async (ssid: string, pwd: string, usedSavedPassword = false) => {
     setPasswordSsid(null);
     setConnecting(ssid);
+    connectingRef.current = ssid;
     try {
       const result = await WifiControlModule.connectToNetwork(ssid, pwd);
       if (result.success) {
@@ -210,6 +224,55 @@ export default function WifiDialog({ visible, onClose }: Props) {
       Alert.alert('Connection failed', e?.message || `Could not connect to "${ssid}"`);
     } finally {
       setConnecting(null);
+      connectingRef.current = null;
+      if (autoConnectingSsidRef.current === ssid) {
+        autoConnectingSsidRef.current = null;
+      }
+    }
+  };
+
+  const autoConnectKnownNetwork = async (scanResults: WifiNetwork[]) => {
+    const currentInfo = wifiInfoRef.current;
+    if (!currentInfo?.isEnabled || currentInfo.isConnected || connectingRef.current || autoConnectingSsidRef.current) {
+      return;
+    }
+
+    for (const network of scanResults) {
+      if (!network.secured) continue;
+      const savedPassword = await getSecureWifiPassword(network.ssid);
+      if (!savedPassword) continue;
+
+      autoConnectingSsidRef.current = network.ssid;
+      connectTo(network.ssid, savedPassword, true);
+      return;
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!wifiInfo?.isConnected || disconnectingWifi) return;
+    const previousInfo = wifiInfo;
+    setDisconnectingWifi(true);
+    setWifiInfo({
+      ...wifiInfo,
+      isConnected: false,
+      ssid: '',
+      signalLevel: 0,
+      rssi: 0,
+    });
+    try {
+      const result = await WifiControlModule.disconnectFromCurrentNetwork();
+      if (result.success === false) {
+        setWifiInfo(previousInfo);
+        Alert.alert('Disconnect failed', `Could not disconnect from "${previousInfo.ssid}".`);
+      } else {
+        setTimeout(refresh, 700);
+        setTimeout(refresh, 1800);
+      }
+    } catch (e: any) {
+      setWifiInfo(previousInfo);
+      Alert.alert('Disconnect failed', e?.message || `Could not disconnect from "${previousInfo.ssid}".`);
+    } finally {
+      setDisconnectingWifi(false);
     }
   };
 
@@ -253,6 +316,17 @@ export default function WifiDialog({ visible, onClose }: Props) {
                   ✓ Connected: {wifiInfo.ssid}{'  '}
                   {signalIcon(wifiInfo.signalLevel)}
                 </Text>
+                <TouchableOpacity
+                  style={[styles.disconnectBtn, disconnectingWifi && styles.disconnectBtnDisabled]}
+                  onPress={handleDisconnect}
+                  disabled={disconnectingWifi}
+                >
+                  {disconnectingWifi ? (
+                    <ActivityIndicator color="#2e7d32" size="small" />
+                  ) : (
+                    <Text style={styles.disconnectBtnText}>Disconnect</Text>
+                  )}
+                </TouchableOpacity>
               </View>
             )}
 
@@ -414,6 +488,9 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   connectedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#e8f5e9',
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -424,6 +501,26 @@ const styles = StyleSheet.create({
     color: '#2e7d32',
     fontSize: 15,
     fontWeight: '600',
+    flex: 1,
+    marginRight: 12,
+  },
+  disconnectBtn: {
+    minWidth: 104,
+    minHeight: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2e7d32',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+  },
+  disconnectBtnDisabled: {
+    opacity: 0.6,
+  },
+  disconnectBtnText: {
+    color: '#2e7d32',
+    fontSize: 13,
+    fontWeight: '700',
   },
   scanBtn: {
     backgroundColor: '#0066cc',

@@ -299,6 +299,27 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    @ReactMethod
+    fun disconnectFromCurrentNetwork(promise: Promise) {
+        try {
+            val wifiManager = reactContext.applicationContext
+                .getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val connectivityManager = reactContext.applicationContext
+                .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+            releaseActiveNetworkRequest(connectivityManager)
+
+            @Suppress("DEPRECATION")
+            val disconnected = try { wifiManager.disconnect() } catch (_: Exception) { false }
+
+            val result = Arguments.createMap()
+            result.putBoolean("success", disconnected)
+            promise.resolve(result)
+        } catch (e: Exception) {
+            promise.reject("DISCONNECT_ERROR", e.message, e)
+        }
+    }
+
     @Suppress("NewApi")
     private fun connectApi29(ssid: String, password: String, promise: Promise) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

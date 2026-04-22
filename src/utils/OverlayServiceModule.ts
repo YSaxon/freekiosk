@@ -17,6 +17,7 @@ interface OverlayServiceModuleType {
   getStatusBarEnabled(): Promise<boolean>;
   setTestMode(enabled: boolean): Promise<boolean>;
   setBackButtonMode(mode: string): Promise<boolean>;
+  setScreensaverDim(active: boolean, dimAlpha: number): Promise<boolean>;
 }
 
 const OverlayServiceModule: OverlayServiceModuleType = NativeModules.OverlayServiceModule;

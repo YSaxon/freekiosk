@@ -384,8 +384,8 @@ const DisplayTab: React.FC<DisplayTabProps> = ({
       </SettingsSection>
       )}
       
-      {/* Screensaver - WebView only, and only when keepScreenOn is enabled */}
-      {displayMode !== 'external_app' && keepScreenOn && (
+      {/* Screensaver - all modes; keepScreenOn required for webview/media_player, native overlay handles it for external_app */}
+      {(displayMode === 'external_app' || keepScreenOn) && (
         <SettingsSection title="Screensaver" icon="weather-night">
           <SettingsSwitch
             label="Enable Screensaver"
@@ -393,10 +393,20 @@ const DisplayTab: React.FC<DisplayTabProps> = ({
             value={screensaverEnabled}
             onValueChange={onScreensaverEnabledChange}
           />
-          
+
           {screensaverEnabled && (
             <>
-              {/* Screensaver Style (dim / url / video) */}
+              {/* External App mode: only dim via native overlay — no WebView/video possible above external app */}
+              {displayMode === 'external_app' && (
+                <SettingsInfoBox variant="info">
+                  <Text style={styles.infoText}>
+                    In External App mode, the screensaver dims the screen via a native overlay drawn above your app. The screen stays on (no auto-off) while dimmed — tap anywhere to wake.
+                  </Text>
+                </SettingsInfoBox>
+              )}
+
+              {/* Screensaver Style (dim / url / video) — webview and media_player only */}
+              {displayMode !== 'external_app' && (
               <View style={styles.subSection}>
                 <Text style={styles.subSectionTitle}>Screensaver Style</Text>
                 <SettingsRadioGroup
@@ -472,14 +482,18 @@ const DisplayTab: React.FC<DisplayTabProps> = ({
                   </SettingsInfoBox>
                 )}
               </View>
+              )} {/* end non-external_app screensaver style block */}
 
-              {/* Screensaver Brightness - only when app manages brightness */}
-              {brightnessManagementEnabled && (
+              {/* Screensaver Brightness - all modes */}
+              {/* In external_app mode, controls the dim overlay opacity (0=black, 1=transparent) */}
+              {(brightnessManagementEnabled || displayMode === 'external_app') && (
                 <View style={styles.subSection}>
                   <Text style={styles.subSectionTitle}>Screensaver Brightness</Text>
                   <SettingsSlider
                     label=""
-                    hint="Screen brightness when screensaver is active"
+                    hint={displayMode === 'external_app'
+                      ? 'Opacity of the dim overlay (0 = black screen, higher = more visible)'
+                      : 'Screen brightness when screensaver is active'}
                     value={screensaverBrightness}
                     onValueChange={onScreensaverBrightnessChange}
                     minimumValue={0}

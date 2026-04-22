@@ -320,6 +320,8 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       if (!autoBrightnessEnabled) return;
       // Skip when screensaver shows content (URL/video): keep auto-brightness running
       if (isScreensaverActive && screensaverType !== 'dim') return;
+      // In external_app mode the dim is handled by the native OverlayService, not brightness
+      if (isScreensaverActive && displayMode === 'external_app') return;
 
       if (isScreensaverActive) {
         // Screensaver active: pause auto-brightness and apply screensaver brightness
@@ -347,7 +349,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     };
     
     handleAutoBrightnessForScreensaver();
-  }, [isScreensaverActive, autoBrightnessEnabled, autoBrightnessMin, autoBrightnessMax, autoBrightnessOffset, autoBrightnessInterval, screensaverBrightness, isScheduledSleep, screensaverType]);
+  }, [isScreensaverActive, autoBrightnessEnabled, autoBrightnessMin, autoBrightnessMax, autoBrightnessOffset, autoBrightnessInterval, screensaverBrightness, isScheduledSleep, screensaverType, displayMode]);
 
   // Désactiver le screensaver quand l'écran perd le focus (navigation vers Settings)
   // Only triggers cleanup on actual focus→blur transition (not when other deps change)
@@ -931,6 +933,18 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     }
   }, [isScreensaverActive, screensaverBrightness, screensaverType]);
 
+  // External App mode: drive dim via native OverlayService overlay (visible above external app)
+  useEffect(() => {
+    if (displayMode !== 'external_app') return;
+    if (!screensaverEnabled) return;
+    if (isScreensaverActive) {
+      const dimAlpha = Math.max(0, Math.min(1, 1 - screensaverBrightness));
+      OverlayServiceModule.setScreensaverDim(true, dimAlpha).catch(() => {});
+    } else {
+      OverlayServiceModule.setScreensaverDim(false, 0).catch(() => {});
+    }
+  }, [isScreensaverActive, screensaverEnabled, displayMode, screensaverBrightness]);
+
   useEffect(() => {
     if (screensaverEnabled && inactivityEnabled) {
       resetTimer();
@@ -1280,9 +1294,30 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       }
     );
 
+    // Wake screensaver when user taps in External App mode (event from OverlayService)
+    const screensaverWakeListener = eventEmitter.addListener(
+      'screensaverWake',
+      () => {
+        setIsScreensaverActive(false);
+        resetTimer();
+      }
+    );
+
+    // Reset inactivity timer when user taps on external app (event from OverlayService tap handler)
+    const screensaverActivityListener = eventEmitter.addListener(
+      'screensaverActivity',
+      () => {
+        if (displayMode === 'external_app') {
+          resetTimer();
+        }
+      }
+    );
+
     return () => {
       appReturnedListener.remove();
       navigateToPinListener.remove();
+      screensaverWakeListener.remove();
+      screensaverActivityListener.remove();
       if (relaunchTimerRef.current) {
         clearTimeout(relaunchTimerRef.current);
       }
@@ -2178,6 +2213,8 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const enableScreensaverEffects = async () => {
     // Content modes (URL/video) keep the current brightness so the user can see the content
     if (screensaverType !== 'dim') return;
+    // In external_app mode the native dim overlay handles the effect
+    if (displayMode === 'external_app') return;
     if (!brightnessManagementRef.current) return;
     try {
       await RNBrightness.setBrightnessLevel(screensaverBrightness);
@@ -2496,7 +2533,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
               ? ((screensaverBrightness === 0 || !brightnessManagementEnabled)
                   ? styles.screensaverBlack
                   : styles.screensaverTransparent)
-              : styles.screensaverBlack,
+              : styles.screensaverTransparent,
           ]}
           activeOpacity={1}
           onPress={onScreensaverTap}

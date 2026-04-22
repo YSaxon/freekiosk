@@ -92,6 +92,11 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [motionCameraPosition, setMotionCameraPosition] = useState<'front' | 'back'>('front');
   const [availableCameras, setAvailableCameras] = useState<Array<{position: 'front' | 'back', id: string}>>([]);
   const [screensaverBrightness, setScreensaverBrightness] = useState<number>(0);
+  const [screensaverType, setScreensaverType] = useState<'dim' | 'url' | 'video'>('dim');
+  const [screensaverUrl, setScreensaverUrl] = useState<string>('');
+  const [screensaverVideoItems, setScreensaverVideoItems] = useState<MediaItem[]>([]);
+  const [screensaverVideoLoop, setScreensaverVideoLoop] = useState<boolean>(true);
+  const [pickingScreensaverMedia, setPickingScreensaverMedia] = useState<boolean>(false);
   const [defaultBrightness, setDefaultBrightness] = useState<number>(0.5);
   const [certificates, setCertificates] = useState<CertificateInfo[]>([]);
 
@@ -415,6 +420,10 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const savedMotionSensitivity = await StorageService.getScreensaverMotionSensitivity();
     const savedMotionCameraPosition = await StorageService.getMotionCameraPosition();
     const savedScreensaverBrightness = await StorageService.getScreensaverBrightness();
+    const savedScreensaverType = await StorageService.getScreensaverType();
+    const savedScreensaverUrl = await StorageService.getScreensaverUrl();
+    const savedScreensaverVideoItems = await StorageService.getScreensaverVideoItems<MediaItem>();
+    const savedScreensaverVideoLoop = await StorageService.getScreensaverVideoLoop();
     const hasPinConfigured = await hasSecurePin();
     
     setIsPinConfigured(hasPinConfigured);
@@ -439,6 +448,10 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     setMotionSensitivity((savedMotionSensitivity as 'low' | 'medium' | 'high') ?? 'medium');
     setMotionCameraPosition(savedMotionCameraPosition ?? 'front');
     setScreensaverBrightness(savedScreensaverBrightness ?? 0);
+    setScreensaverType(savedScreensaverType);
+    setScreensaverUrl(savedScreensaverUrl);
+    setScreensaverVideoItems(savedScreensaverVideoItems);
+    setScreensaverVideoLoop(savedScreensaverVideoLoop);
 
     // Detect available cameras (first attempt — may return [] on slow SoCs before
     // ProcessCameraProvider resolves; the CameraDevicesChanged listener handles the retry)
@@ -710,6 +723,32 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
       }
     } finally {
       setPickingMedia(false);
+    }
+  };
+
+  const handlePickScreensaverMediaFromDevice = async (type: 'video' | 'image' | 'any') => {
+    try {
+      setPickingScreensaverMedia(true);
+      const result = await FilePickerModule.pickMultipleMedia(type);
+      const files = Array.isArray(result) ? result : [result];
+      if (files.length === 0) return;
+
+      const newItems: MediaItem[] = files.map((file: any) => ({
+        id: generateMediaItemId(),
+        url: file.path,
+        type: (file.type === 'video' ? 'video' : 'image') as 'video' | 'image',
+        title: file.name,
+        isLocal: true,
+        fileName: file.name,
+      }));
+
+      setScreensaverVideoItems(prev => [...prev, ...newItems]);
+    } catch (error: any) {
+      if (error?.code !== 'PICKER_CANCELLED') {
+        Alert.alert('Error', `Failed to pick media: ${error?.message || error}`);
+      }
+    } finally {
+      setPickingScreensaverMedia(false);
     }
   };
 
@@ -1164,6 +1203,10 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
       await StorageService.saveScreensaverMotionEnabled(motionEnabled);
       await StorageService.saveScreensaverMotionSensitivity(motionSensitivity);
       await StorageService.saveScreensaverBrightness(screensaverBrightness);
+      await StorageService.saveScreensaverType(screensaverType);
+      await StorageService.saveScreensaverUrl(screensaverUrl);
+      await StorageService.saveScreensaverVideoItems(screensaverVideoItems);
+      await StorageService.saveScreensaverVideoLoop(screensaverVideoLoop);
       
       // Auto-brightness settings
       await StorageService.saveAutoBrightnessEnabled(autoBrightnessEnabled);
@@ -1739,6 +1782,16 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onScreensaverEnabledChange={setScreensaverEnabled}
             screensaverBrightness={screensaverBrightness}
             onScreensaverBrightnessChange={setScreensaverBrightness}
+            screensaverType={screensaverType}
+            onScreensaverTypeChange={setScreensaverType}
+            screensaverUrl={screensaverUrl}
+            onScreensaverUrlChange={setScreensaverUrl}
+            screensaverVideoItems={screensaverVideoItems}
+            onScreensaverVideoItemsChange={setScreensaverVideoItems}
+            screensaverVideoLoop={screensaverVideoLoop}
+            onScreensaverVideoLoopChange={setScreensaverVideoLoop}
+            onPickScreensaverMedia={handlePickScreensaverMediaFromDevice}
+            pickingScreensaverMedia={pickingScreensaverMedia}
             inactivityDelay={inactivityDelay}
             onInactivityDelayChange={setInactivityDelay}
             motionEnabled={motionEnabled}

@@ -16,6 +16,8 @@ import {
 import ScreenScheduleRuleCard from '../../../components/settings/ScreenScheduleRuleCard';
 import { Colors, Spacing, Typography } from '../../../theme';
 import { ScreenScheduleRule } from '../../../types/screenScheduler';
+import type { MediaItem } from '../../../types/mediaPlayer';
+import { getMediaDisplayName } from '../../../types/mediaPlayer';
 
 interface DisplayTabProps {
   displayMode: 'webview' | 'external_app' | 'media_player';
@@ -81,7 +83,19 @@ interface DisplayTabProps {
   onScreensaverBrightnessChange: (value: number) => void;
   inactivityDelay: string;
   onInactivityDelayChange: (value: string) => void;
-  
+
+  // Screensaver style (dim/url/video)
+  screensaverType: 'dim' | 'url' | 'video';
+  onScreensaverTypeChange: (value: 'dim' | 'url' | 'video') => void;
+  screensaverUrl: string;
+  onScreensaverUrlChange: (value: string) => void;
+  screensaverVideoItems: MediaItem[];
+  onScreensaverVideoItemsChange: (items: MediaItem[]) => void;
+  screensaverVideoLoop: boolean;
+  onScreensaverVideoLoopChange: (value: boolean) => void;
+  onPickScreensaverMedia: (type: 'video' | 'image' | 'any') => void;
+  pickingScreensaverMedia: boolean;
+
   // Motion detection
   motionEnabled: boolean;
   onMotionEnabledChange: (value: boolean) => void;
@@ -156,6 +170,16 @@ const DisplayTab: React.FC<DisplayTabProps> = ({
   onScreensaverBrightnessChange,
   inactivityDelay,
   onInactivityDelayChange,
+  screensaverType,
+  onScreensaverTypeChange,
+  screensaverUrl,
+  onScreensaverUrlChange,
+  screensaverVideoItems,
+  onScreensaverVideoItemsChange,
+  screensaverVideoLoop,
+  onScreensaverVideoLoopChange,
+  onPickScreensaverMedia,
+  pickingScreensaverMedia,
   motionEnabled,
   onMotionEnabledChange,
   motionSensitivity,
@@ -372,6 +396,83 @@ const DisplayTab: React.FC<DisplayTabProps> = ({
           
           {screensaverEnabled && (
             <>
+              {/* Screensaver Style (dim / url / video) */}
+              <View style={styles.subSection}>
+                <Text style={styles.subSectionTitle}>Screensaver Style</Text>
+                <SettingsRadioGroup
+                  options={[
+                    { label: 'Dim Only (default)', value: 'dim', hint: 'Just dim the brightness (current behavior)' },
+                    { label: 'Web Page', value: 'url', hint: 'Show a web page (clock, dashboard, HTML)' },
+                    { label: 'Video / Image', value: 'video', hint: 'Play a video or image slideshow' },
+                  ]}
+                  value={screensaverType}
+                  onValueChange={(v) => onScreensaverTypeChange(v as 'dim' | 'url' | 'video')}
+                />
+
+                {screensaverType === 'url' && (
+                  <SettingsInput
+                    label="Screensaver URL"
+                    value={screensaverUrl}
+                    onChangeText={onScreensaverUrlChange}
+                    placeholder="https://example.com/clock"
+                    keyboardType="url"
+                    autoCapitalize="none"
+                    hint="The page is shown read-only; tap anywhere to wake"
+                  />
+                )}
+
+                {screensaverType === 'video' && (
+                  <>
+                    <SettingsInfoBox variant="info">
+                      <Text style={styles.infoText}>
+                        {'🎬 Pick a video or image from your device.\n'}
+                        {'Multiple items play as a slideshow.'}
+                      </Text>
+                    </SettingsInfoBox>
+                    <TouchableOpacity
+                      style={[styles.ssPickButton, pickingScreensaverMedia && styles.ssPickButtonDisabled]}
+                      onPress={() => !pickingScreensaverMedia && onPickScreensaverMedia('any')}
+                      disabled={pickingScreensaverMedia}
+                    >
+                      <Text style={styles.ssPickButtonText}>
+                        {pickingScreensaverMedia ? '⏳ Picking…' : '📁 Pick from Device'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {screensaverVideoItems.map((item, index) => (
+                      <View key={item.id} style={styles.ssMediaCard}>
+                        <Text style={styles.ssMediaIndex}>{index + 1}</Text>
+                        <Text style={styles.ssMediaName} numberOfLines={1}>
+                          {item.type === 'video' ? '🎥 ' : '🖼️ '}{getMediaDisplayName(item)}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            onScreensaverVideoItemsChange(screensaverVideoItems.filter(i => i.id !== item.id));
+                          }}
+                        >
+                          <Text style={styles.ssMediaDelete}>✗</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+
+                    <SettingsSwitch
+                      label="Loop playlist"
+                      hint="Restart from the beginning when the playlist ends"
+                      value={screensaverVideoLoop}
+                      onValueChange={onScreensaverVideoLoopChange}
+                    />
+                  </>
+                )}
+
+                {(screensaverType === 'url' || screensaverType === 'video') && screensaverBrightness < 0.1 && brightnessManagementEnabled && (
+                  <SettingsInfoBox variant="warning">
+                    <Text style={styles.infoText}>
+                      ⚠️ Screensaver Brightness is below 10%. Raise it (see slider below) so the content is visible, or switch to Dim Only.
+                    </Text>
+                  </SettingsInfoBox>
+                )}
+              </View>
+
               {/* Screensaver Brightness - only when app manages brightness */}
               {brightnessManagementEnabled && (
                 <View style={styles.subSection}>
@@ -814,6 +915,48 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 15,
     fontWeight: '600',
+  },
+  ssPickButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: Spacing.sm,
+  },
+  ssPickButtonDisabled: {
+    opacity: 0.5,
+  },
+  ssPickButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  ssMediaCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.background,
+    borderRadius: 8,
+    marginVertical: Spacing.xs,
+  },
+  ssMediaIndex: {
+    fontWeight: '600',
+    marginRight: Spacing.sm,
+    color: Colors.textSecondary,
+    minWidth: 20,
+  },
+  ssMediaName: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.textPrimary,
+  },
+  ssMediaDelete: {
+    color: Colors.error,
+    fontSize: 18,
+    fontWeight: '700',
+    paddingHorizontal: Spacing.sm,
   },
 });
 

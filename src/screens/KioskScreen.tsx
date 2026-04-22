@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNBrightness from '../utils/BrightnessModule';
 import { useIsFocused, useFocusEffect } from '@react-navigation/native';
 import WebViewComponent, { WebViewComponentRef } from '../components/WebViewComponent';
+import { WebView } from 'react-native-webview';
 import MediaPlayerComponent from '../components/MediaPlayerComponent';
 import StatusBar from '../components/StatusBar';
 import MotionDetector from '../components/MotionDetector';
@@ -45,6 +46,10 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [isScreensaverActive, setIsScreensaverActive] = useState(false);
   const [defaultBrightness, setDefaultBrightness] = useState<number>(0.5);
   const [screensaverBrightness, setScreensaverBrightness] = useState<number>(0);
+  const [screensaverType, setScreensaverType] = useState<'dim' | 'url' | 'video'>('dim');
+  const [screensaverUrl, setScreensaverUrl] = useState<string>('');
+  const [screensaverVideoItems, setScreensaverVideoItems] = useState<MediaItem[]>([]);
+  const [screensaverVideoLoop, setScreensaverVideoLoop] = useState<boolean>(true);
   const [inactivityEnabled, setInactivityEnabled] = useState(true);
   const [inactivityDelay, setInactivityDelay] = useState(600000);
   const [motionEnabled, setMotionEnabled] = useState(false);
@@ -313,7 +318,9 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       // Skip if scheduled sleep is active (handled separately)
       if (isScheduledSleep) return;
       if (!autoBrightnessEnabled) return;
-      
+      // Skip when screensaver shows content (URL/video): keep auto-brightness running
+      if (isScreensaverActive && screensaverType !== 'dim') return;
+
       if (isScreensaverActive) {
         // Screensaver active: pause auto-brightness and apply screensaver brightness
         try {
@@ -340,7 +347,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     };
     
     handleAutoBrightnessForScreensaver();
-  }, [isScreensaverActive, autoBrightnessEnabled, autoBrightnessMin, autoBrightnessMax, autoBrightnessOffset, autoBrightnessInterval, screensaverBrightness, isScheduledSleep]);
+  }, [isScreensaverActive, autoBrightnessEnabled, autoBrightnessMin, autoBrightnessMax, autoBrightnessOffset, autoBrightnessInterval, screensaverBrightness, isScheduledSleep, screensaverType]);
 
   // Désactiver le screensaver quand l'écran perd le focus (navigation vers Settings)
   // Only triggers cleanup on actual focus→blur transition (not when other deps change)
@@ -922,7 +929,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     if (isScreensaverActive) {
       enableScreensaverEffects();
     }
-  }, [isScreensaverActive, screensaverBrightness]);
+  }, [isScreensaverActive, screensaverBrightness, screensaverType]);
 
   useEffect(() => {
     if (screensaverEnabled && inactivityEnabled) {
@@ -1353,6 +1360,10 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       const savedMotionAlwaysOn = bool(K.MQTT_MOTION_ALWAYS_ON, false);
       const savedMotionCameraPosition = (str(K.MOTION_CAMERA_POSITION) ?? 'front') as 'front' | 'back';
       const savedMotionSensitivity = (str(K.SCREENSAVER_MOTION_SENSITIVITY) ?? 'medium') as 'low' | 'medium' | 'high';
+      const savedScreensaverType = (str(K.SCREENSAVER_TYPE) ?? 'dim') as 'dim' | 'url' | 'video';
+      const savedScreensaverUrl = str(K.SCREENSAVER_URL) ?? '';
+      const savedScreensaverVideoItems = jsonParse(K.SCREENSAVER_VIDEO_ITEMS, []) as MediaItem[];
+      const savedScreensaverVideoLoop = bool(K.SCREENSAVER_VIDEO_LOOP, true);
       const savedStatusBarEnabled = bool(K.STATUS_BAR_ENABLED, false);
       const savedStatusBarOnOverlay = bool(K.STATUS_BAR_ON_OVERLAY, true);
       const savedStatusBarOnReturn = bool(K.STATUS_BAR_ON_RETURN, true);
@@ -1380,6 +1391,10 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       setMotionAlwaysOn(savedMotionAlwaysOn);
       setMotionCameraPosition(savedMotionCameraPosition);
       setMotionSensitivity(savedMotionSensitivity);
+      setScreensaverType(savedScreensaverType);
+      setScreensaverUrl(savedScreensaverUrl);
+      setScreensaverVideoItems(savedScreensaverVideoItems);
+      setScreensaverVideoLoop(savedScreensaverVideoLoop);
       setStatusBarEnabled(savedStatusBarEnabled);
       setStatusBarOnOverlay(savedStatusBarOnOverlay);
       setStatusBarOnReturn(savedStatusBarOnReturn);
@@ -2161,6 +2176,8 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   }, [defaultBrightness, resetTimer, autoBrightnessEnabled]);
 
   const enableScreensaverEffects = async () => {
+    // Content modes (URL/video) keep the current brightness so the user can see the content
+    if (screensaverType !== 'dim') return;
     if (!brightnessManagementRef.current) return;
     try {
       await RNBrightness.setBrightnessLevel(screensaverBrightness);
@@ -2470,18 +2487,51 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         </View>
       )}
 
-      {/* Screensaver overlay - black when brightness=0% or brightness management disabled, transparent when dimming */}
+      {/* Screensaver overlay - dim mode uses black/transparent based on brightness; URL/video modes render content */}
       {isScreensaverActive && screensaverEnabled && (
         <TouchableOpacity
           style={[
             styles.screensaverOverlay,
-            (screensaverBrightness === 0 || !brightnessManagementEnabled)
-              ? styles.screensaverBlack 
-              : styles.screensaverTransparent
+            screensaverType === 'dim'
+              ? ((screensaverBrightness === 0 || !brightnessManagementEnabled)
+                  ? styles.screensaverBlack
+                  : styles.screensaverTransparent)
+              : styles.screensaverBlack,
           ]}
           activeOpacity={1}
           onPress={onScreensaverTap}
-        />
+        >
+          {screensaverType === 'url' && screensaverUrl.trim().length > 0 && (
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <WebView
+                source={{ uri: screensaverUrl }}
+                style={styles.screensaverContent}
+                javaScriptEnabled
+                domStorageEnabled
+                mixedContentMode="always"
+                userAgent={customUserAgent?.trim() || undefined}
+              />
+            </View>
+          )}
+
+          {screensaverType === 'video' && screensaverVideoItems.length > 0 && (
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <MediaPlayerComponent
+                items={screensaverVideoItems}
+                autoPlay
+                loop={screensaverVideoLoop}
+                shuffle={false}
+                imageDuration={10}
+                showControls={false}
+                fitMode="contain"
+                backgroundColor="#000"
+                transitionEnabled={false}
+                transitionDuration={0}
+                muteVideo
+              />
+            </View>
+          )}
+        </TouchableOpacity>
       )}
 
       {/* Scheduled Sleep overlay - always black, independent from screensaver */}
@@ -2548,6 +2598,10 @@ const styles = StyleSheet.create({
   },
   screensaverTransparent: {
     backgroundColor: 'transparent',
+  },
+  screensaverContent: {
+    flex: 1,
+    backgroundColor: '#000',
   },
 });
 

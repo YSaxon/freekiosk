@@ -152,6 +152,16 @@
         </intent-filter>
       </receiver>
 
+      <!-- Re-arm lock task after FreeKiosk is updated/reinstalled -->
+      <receiver
+        android:name=".PackageReplacedReceiver"
+        android:enabled="true"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+        </intent-filter>
+      </receiver>
+
       <!-- Service d'overlay pour bouton retour en mode External App -->
       <service
         android:name=".OverlayService"

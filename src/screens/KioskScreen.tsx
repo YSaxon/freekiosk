@@ -106,6 +106,17 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [returnMode, setReturnMode] = useState<string>('tap_anywhere');
   const [returnButtonPosition, setReturnButtonPosition] = useState<string>('bottom-right');
 
+  const resetTapSequence = useCallback((reason?: string) => {
+    tapCountRef.current = 0;
+    if (tapTimerRef.current) {
+      clearTimeout(tapTimerRef.current);
+      tapTimerRef.current = null;
+    }
+    if (reason) {
+      console.log(`[${returnTapCount}-tap] ${reason} - resetting sequence`);
+    }
+  }, [returnTapCount]);
+
   useEffect(() => {
     isFocusedRef.current = isFocused;
     if (!isFocused && appLaunchTimeoutRef.current) {
@@ -117,11 +128,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', () => {
       isKeyboardVisibleRef.current = true;
-      tapCountRef.current = 0;
-      if (tapTimerRef.current) {
-        clearTimeout(tapTimerRef.current);
-        tapTimerRef.current = null;
-      }
+      resetTapSequence('Keyboard shown');
     });
     const hideSub = Keyboard.addListener('keyboardDidHide', () => {
       isKeyboardVisibleRef.current = false;
@@ -131,7 +138,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       showSub.remove();
       hideSub.remove();
     };
-  }, []);
+  }, [resetTapSequence]);
   
   // URL Rotation states
   const [urlRotationEnabled, setUrlRotationEnabled] = useState<boolean>(false);
@@ -1957,7 +1964,18 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     screenSchedulerWakeOnTouchRef.current = screenSchedulerWakeOnTouch;
   }, [screenSchedulerWakeOnTouch]);
 
-  const onUserInteraction = useCallback(async (event?: { isTap?: boolean; x?: number; y?: number }) => {
+  const onUserInteraction = useCallback(async (event?: { isTap?: boolean; x?: number; y?: number; keyboardVisible?: boolean; cancelTapSequence?: boolean; reason?: string }) => {
+    if (event?.keyboardVisible !== undefined) {
+      isKeyboardVisibleRef.current = event.keyboardVisible;
+      if (event.keyboardVisible) {
+        resetTapSequence('WebView keyboard focus');
+      }
+    }
+
+    if (event?.cancelTapSequence) {
+      resetTapSequence(event.reason || 'Non-tap gesture');
+    }
+
     // If in scheduled sleep and wake on touch is disabled, ignore user interaction
     // (except still allow N-tap for settings access)
     if (isScheduledSleepRef.current && !screenSchedulerWakeOnTouchRef.current) {
@@ -2004,11 +2022,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     // In button mode: taps are handled by the button itself, not here
     if ((displayMode === 'webview' || displayMode === 'media_player') && event?.isTap && returnMode === 'tap_anywhere') {
       if (isKeyboardVisibleRef.current) {
-        tapCountRef.current = 0;
-        if (tapTimerRef.current) {
-          clearTimeout(tapTimerRef.current);
-          tapTimerRef.current = null;
-        }
+        resetTapSequence('Tap ignored while keyboard is visible');
         return;
       }
 
@@ -2076,7 +2090,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         tapCountRef.current = 0;
       }, returnTapTimeout - (now - lastTapTimeRef.current));
     }
-  }, [displayMode, navigation, resetTimer, clearTimer, markUserInteraction, returnTapCount, returnTapTimeout, defaultBrightness, TAP_PROXIMITY_RADIUS, exitScheduledSleep]);
+  }, [displayMode, navigation, resetTimer, clearTimer, markUserInteraction, returnTapCount, returnTapTimeout, defaultBrightness, TAP_PROXIMITY_RADIUS, exitScheduledSleep, resetTapSequence]);
 
 
   const onScreensaverTap = useCallback(async () => {

@@ -22,7 +22,7 @@ interface MediaPlayerComponentProps {
   transitionEnabled: boolean;
   transitionDuration: number;
   muteVideo: boolean;
-  onUserInteraction?: (event?: { isTap?: boolean; x?: number; y?: number }) => void;
+  onUserInteraction?: (event?: { isTap?: boolean; x?: number; y?: number; cancelTapSequence?: boolean; reason?: string }) => void;
 }
 
 const MediaPlayerComponent: React.FC<MediaPlayerComponentProps> = ({
@@ -65,6 +65,8 @@ const MediaPlayerComponent: React.FC<MediaPlayerComponentProps> = ({
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'interaction' && onUserInteraction) {
         onUserInteraction({ isTap: true, x: data.x, y: data.y });
+      } else if (data.type === 'tap-cancel' && onUserInteraction) {
+        onUserInteraction({ cancelTapSequence: true, reason: data.reason || 'gesture' });
       }
     } catch {
       // ignore
@@ -573,7 +575,41 @@ function generatePlayerHTML(settings: {
   };
   
   // Touch/click interactions
+  var tapStartX = 0;
+  var tapStartY = 0;
+  var touchMoved = false;
+  var TOUCH_MOVE_THRESHOLD = 20;
+
+  document.addEventListener('touchstart', function(e) {
+    if (e.touches && e.touches.length > 0) {
+      tapStartX = e.touches[0].clientX;
+      tapStartY = e.touches[0].clientY;
+      touchMoved = false;
+    }
+  }, true);
+
+  document.addEventListener('touchmove', function(e) {
+    if (e.touches && e.touches.length > 0) {
+      var dx = e.touches[0].clientX - tapStartX;
+      var dy = e.touches[0].clientY - tapStartY;
+      if (Math.sqrt(dx * dx + dy * dy) > TOUCH_MOVE_THRESHOLD) {
+        touchMoved = true;
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'tap-cancel',
+            reason: 'swipe'
+          }));
+        }
+      }
+    }
+  }, true);
+
   document.addEventListener('click', function(e) {
+    if (touchMoved) {
+      touchMoved = false;
+      return;
+    }
+
     // Report interaction to React Native
     if (window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage(JSON.stringify({

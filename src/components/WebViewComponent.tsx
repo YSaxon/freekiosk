@@ -27,7 +27,7 @@ interface WebViewComponentProps {
   url: string;
   autoReload: boolean;
   keyboardMode?: string; // 'default', 'force_numeric', 'smart'
-  onUserInteraction?: (event?: { isTap?: boolean; x?: number; y?: number }) => void; // callback optionnel pour interaction utilisateur
+  onUserInteraction?: (event?: { isTap?: boolean; x?: number; y?: number; keyboardVisible?: boolean; cancelTapSequence?: boolean; reason?: string }) => void; // callback optionnel pour interaction utilisateur
   jsToExecute?: string; // JavaScript code to execute from API
   onJsExecuted?: () => void; // callback when JS is executed
   showBackButton?: boolean; // Enable web navigation back button
@@ -288,6 +288,11 @@ const WebViewComponent = forwardRef<WebViewComponentRef, WebViewComponentProps>(
     // Throttling pour éviter le flood de messages (critique sur Fire OS)
     let lastInteraction = 0;
     const THROTTLE_MS = 200; // Max 5 messages/sec
+    const TOUCH_MOVE_THRESHOLD = 20;
+    let tapStartX = 0;
+    let tapStartY = 0;
+    let touchMoved = false;
+    let sentGestureCancel = false;
 
     function sendInteraction() {
       const now = Date.now();
@@ -297,10 +302,49 @@ const WebViewComponent = forwardRef<WebViewComponentRef, WebViewComponentProps>(
       }
     }
 
+    function sendTapCancel(reason) {
+      if (sentGestureCancel) return;
+      sentGestureCancel = true;
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'FIVE_TAP_CANCEL',
+        reason: reason || 'gesture'
+      }));
+    }
+
+    function isKeyboardTarget(target) {
+      if (!target) return false;
+      var tag = (target.tagName || '').toLowerCase();
+      return tag === 'input' || tag === 'textarea' || target.isContentEditable;
+    }
+
     // Tap detection for 5-tap - Use touchend on mobile (click doesn't always fire)
     // Send coordinates for spatial proximity detection
+    document.addEventListener('touchstart', function(e) {
+      sendInteraction();
+      if (e.touches && e.touches.length > 0) {
+        var touch = e.touches[0];
+        tapStartX = touch.clientX;
+        tapStartY = touch.clientY;
+        touchMoved = false;
+        sentGestureCancel = false;
+      }
+    }, true);
+
+    document.addEventListener('touchmove', function(e) {
+      sendInteraction();
+      if (e.touches && e.touches.length > 0) {
+        var touch = e.touches[0];
+        var dx = touch.clientX - tapStartX;
+        var dy = touch.clientY - tapStartY;
+        if (Math.sqrt(dx * dx + dy * dy) > TOUCH_MOVE_THRESHOLD) {
+          touchMoved = true;
+          sendTapCancel('swipe');
+        }
+      }
+    }, true);
+
     document.addEventListener('touchend', function(e) {
-      if (e.changedTouches && e.changedTouches.length > 0) {
+      if (!touchMoved && e.changedTouches && e.changedTouches.length > 0) {
         var touch = e.changedTouches[0];
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'FIVE_TAP_CLICK',
@@ -316,11 +360,28 @@ const WebViewComponent = forwardRef<WebViewComponentRef, WebViewComponentProps>(
     }, true);
 
     // Scroll avec throttling (évite 50+ msg/sec)
-    document.addEventListener('scroll', sendInteraction, true);
+    document.addEventListener('scroll', function() {
+      sendInteraction();
+      sendTapCancel('scroll');
+    }, true);
 
-    // Touch events avec throttling (for screensaver only, not for tap counting)
-    document.addEventListener('touchstart', sendInteraction, true);
-    document.addEventListener('touchmove', sendInteraction, true);
+    document.addEventListener('focusin', function(e) {
+      if (isKeyboardTarget(e.target)) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'KEYBOARD_VISIBILITY',
+          visible: true
+        }));
+      }
+    }, true);
+
+    document.addEventListener('focusout', function(e) {
+      if (isKeyboardTarget(e.target)) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'KEYBOARD_VISIBILITY',
+          visible: false
+        }));
+      }
+    }, true);
 
     // ==================== speechSynthesis Polyfill ====================
     // Android WebView does not implement the Web Speech API (speechSynthesis).
@@ -538,6 +599,10 @@ const WebViewComponent = forwardRef<WebViewComponentRef, WebViewComponentProps>(
         const data = JSON.parse(message);
         if (data.type === 'FIVE_TAP_CLICK' && onUserInteraction) {
           onUserInteraction({ isTap: true, x: data.x, y: data.y });
+        } else if (data.type === 'FIVE_TAP_CANCEL' && onUserInteraction) {
+          onUserInteraction({ cancelTapSequence: true, reason: data.reason || 'gesture' });
+        } else if (data.type === 'KEYBOARD_VISIBILITY' && onUserInteraction) {
+          onUserInteraction({ keyboardVisible: Boolean(data.visible), cancelTapSequence: Boolean(data.visible), reason: 'keyboard' });
         } else if (data.type === 'SPEECH_SYNTH_SPEAK') {
           // speechSynthesis polyfill: bridge to native Android TTS
           if (HttpServerModule?.speak) {

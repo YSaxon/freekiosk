@@ -432,6 +432,7 @@ const DisplayTab: React.FC<DisplayTabProps> = ({
                       }
                     })()}
                   </>
+                )}
 
                 {screensaverType === 'video' && (
                   <>

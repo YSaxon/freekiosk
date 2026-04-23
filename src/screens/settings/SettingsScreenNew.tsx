@@ -1193,20 +1193,22 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveScreenSchedulerRules(screenSchedulerRules);
     await StorageService.saveScreenSchedulerWakeOnTouch(screenSchedulerWakeOnTouch);
 
+    // Screensaver settings apply to all display modes (external_app now supports screensaver)
+    await StorageService.saveScreensaverEnabled(screensaverEnabled);
+    await StorageService.saveScreensaverInactivityEnabled(true);
+    await StorageService.saveScreensaverInactivityDelay(inactivityDelayNumber * 60000);
+    await StorageService.saveScreensaverMotionEnabled(motionEnabled);
+    await StorageService.saveScreensaverMotionSensitivity(motionSensitivity);
+    await StorageService.saveScreensaverBrightness(screensaverBrightness);
+    await StorageService.saveScreensaverType(screensaverType);
+    await StorageService.saveScreensaverUrl(screensaverUrl);
+    await StorageService.saveScreensaverVideoItems(screensaverVideoItems);
+    await StorageService.saveScreensaverVideoLoop(screensaverVideoLoop);
+
     if (displayMode === 'webview' || displayMode === 'media_player') {
       await StorageService.saveAutoReload(displayMode === 'webview' ? autoReload : false);
       await StorageService.saveKioskEnabled(kioskEnabled);
-      await StorageService.saveScreensaverEnabled(screensaverEnabled);
       await StorageService.saveDefaultBrightness(defaultBrightness);
-      await StorageService.saveScreensaverInactivityEnabled(true);
-      await StorageService.saveScreensaverInactivityDelay(inactivityDelayNumber * 60000);
-      await StorageService.saveScreensaverMotionEnabled(motionEnabled);
-      await StorageService.saveScreensaverMotionSensitivity(motionSensitivity);
-      await StorageService.saveScreensaverBrightness(screensaverBrightness);
-      await StorageService.saveScreensaverType(screensaverType);
-      await StorageService.saveScreensaverUrl(screensaverUrl);
-      await StorageService.saveScreensaverVideoItems(screensaverVideoItems);
-      await StorageService.saveScreensaverVideoLoop(screensaverVideoLoop);
       
       // Auto-brightness settings
       await StorageService.saveAutoBrightnessEnabled(autoBrightnessEnabled);

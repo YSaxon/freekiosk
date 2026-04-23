@@ -1523,7 +1523,11 @@ class MainActivity : ReactActivity() {
 
   override fun onDestroy() {
     super.onDestroy()
-    disableKioskRestrictions()
+    // Do not disable kiosk restrictions here. onDestroy also runs during package
+    // replacement, process death, or OEM cleanup while an external app is in front.
+    // Loosening Device Owner lock-task features from this lifecycle callback can
+    // leave the external app visible with system navigation enabled. Intentional
+    // exits already call disableKioskRestrictions() explicitly before finishing.
     
     // Stop KioskWatchdogService if kiosk mode was intentionally disabled (#96 fix)
     // This prevents the watchdog from relaunching the app after an intentional exit.

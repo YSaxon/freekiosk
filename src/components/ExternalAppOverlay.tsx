@@ -65,10 +65,43 @@ const ExternalAppOverlay: React.FC<ExternalAppOverlayProps> = ({
   const firstTapXRef = useRef<number>(0);
   const firstTapYRef = useRef<number>(0);
   const TAP_PROXIMITY_RADIUS = 80;
+  const TOUCH_MOVE_THRESHOLD = 20;
+  const touchStartXRef = useRef<number>(0);
+  const touchStartYRef = useRef<number>(0);
+  const touchMovedRef = useRef<boolean>(false);
+
+  const resetGridTapSequence = useCallback(() => {
+    gridTapCountRef.current = 0;
+    if (gridTapTimerRef.current) {
+      clearTimeout(gridTapTimerRef.current);
+      gridTapTimerRef.current = null;
+    }
+  }, []);
 
   // tap_anywhere mode: N-tap with spatial proximity check (identical to WebView)
-  const handleGridTouch = useCallback((event: any) => {
+  const handleGridTouchStart = useCallback((event: any) => {
     if (returnMode !== 'tap_anywhere') return;
+    touchStartXRef.current = event.nativeEvent.pageX ?? 0;
+    touchStartYRef.current = event.nativeEvent.pageY ?? 0;
+    touchMovedRef.current = false;
+  }, [returnMode]);
+
+  const handleGridTouchMove = useCallback((event: any) => {
+    if (returnMode !== 'tap_anywhere') return;
+    const dx = (event.nativeEvent.pageX ?? 0) - touchStartXRef.current;
+    const dy = (event.nativeEvent.pageY ?? 0) - touchStartYRef.current;
+    if (Math.sqrt(dx * dx + dy * dy) > TOUCH_MOVE_THRESHOLD) {
+      touchMovedRef.current = true;
+      resetGridTapSequence();
+    }
+  }, [returnMode, resetGridTapSequence]);
+
+  const handleGridTouchEnd = useCallback((event: any) => {
+    if (returnMode !== 'tap_anywhere') return;
+    if (touchMovedRef.current) {
+      touchMovedRef.current = false;
+      return;
+    }
 
     const tapX = event.nativeEvent.pageX ?? 0;
     const tapY = event.nativeEvent.pageY ?? 0;
@@ -208,7 +241,12 @@ const ExternalAppOverlay: React.FC<ExternalAppOverlayProps> = ({
   // Multi-app mode: show app grid (home screen)
   if (isMultiAppMode && !isAppLaunched) {
     return (
-      <View style={styles.container} onTouchStart={handleGridTouch}>
+      <View
+        style={styles.container}
+        onTouchStart={handleGridTouchStart}
+        onTouchMove={handleGridTouchMove}
+        onTouchEnd={handleGridTouchEnd}
+      >
         {showStatusBar && (
           <StatusBar
             showBattery={showBattery}

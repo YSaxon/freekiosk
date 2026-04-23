@@ -26,6 +26,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.provider.Settings
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import android.Manifest
@@ -33,6 +34,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 class MainActivity : ReactActivity() {
+
+  private val gboardPackageName = "com.google.android.inputmethod.latin"
+  private val gboardPreventExternalIntentsKey = "prevent_external_intents"
 
   companion object {
     // Flag partagé pour bloquer le relaunch - accessible depuis OverlayService
@@ -288,6 +292,8 @@ class MainActivity : ReactActivity() {
     if (!devicePolicyManager.isDeviceOwnerApp(packageName)) return
 
     try {
+      applyGboardKioskRestrictions()
+
       // Read settings from AsyncStorage v2 database
       // allowPowerButton: true = power menu allowed (default), false = blocked by admin
       val allowPowerButtonValue = getAsyncStorageValue("@kiosk_allow_power_button", "true")
@@ -364,6 +370,8 @@ class MainActivity : ReactActivity() {
     if (!devicePolicyManager.isDeviceOwnerApp(packageName)) return
 
     try {
+      clearGboardKioskRestrictions()
+
       // Réinitialiser les features Lock Task pour permettre la navigation normale
       if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
         // Restaurer les features par défaut (Home, Recents, etc.)
@@ -391,6 +399,40 @@ class MainActivity : ReactActivity() {
       DebugLog.d("MainActivity", "Kiosk restrictions disabled")
     } catch (e: Exception) {
       DebugLog.errorProduction("MainActivity", "Error disabling restrictions: ${e.message}")
+    }
+  }
+
+  private fun applyGboardKioskRestrictions() {
+    try {
+      packageManager.getPackageInfo(gboardPackageName, 0)
+    } catch (_: Exception) {
+      DebugLog.d("MainActivity", "Gboard not installed; skipping managed restrictions")
+      return
+    }
+
+    try {
+      val restrictions = Bundle().apply {
+        putBoolean(gboardPreventExternalIntentsKey, true)
+      }
+      devicePolicyManager.setApplicationRestrictions(adminComponent, gboardPackageName, restrictions)
+      DebugLog.d("MainActivity", "Applied Gboard managed restrictions: $gboardPreventExternalIntentsKey=true")
+    } catch (e: Exception) {
+      DebugLog.errorProduction("MainActivity", "Failed to apply Gboard managed restrictions: ${e.message}")
+    }
+  }
+
+  private fun clearGboardKioskRestrictions() {
+    try {
+      packageManager.getPackageInfo(gboardPackageName, 0)
+    } catch (_: Exception) {
+      return
+    }
+
+    try {
+      devicePolicyManager.setApplicationRestrictions(adminComponent, gboardPackageName, Bundle())
+      DebugLog.d("MainActivity", "Cleared Gboard managed restrictions")
+    } catch (e: Exception) {
+      DebugLog.errorProduction("MainActivity", "Failed to clear Gboard managed restrictions: ${e.message}")
     }
   }
 

@@ -195,11 +195,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [disableUserZoom, setDisableUserZoom] = useState<boolean>(false);
   const [customUserAgent, setCustomUserAgent] = useState<string>('');
 
-  // Lock screen quick panel (swipe-down WiFi/BT/audio access)
-  const [lockscreenSwipeDownEnabled, setLockscreenSwipeDownEnabled] = useState<boolean>(false);
-  const [lockscreenSwipeDownWifi, setLockscreenSwipeDownWifi] = useState<boolean>(false);
-  const [lockscreenSwipeDownBt, setLockscreenSwipeDownBt] = useState<boolean>(false);
-  const [lockscreenSwipeDownAudio, setLockscreenSwipeDownAudio] = useState<boolean>(false);
+  // Lock screen quick controls
   const [lockscreenEmergencyEnabled, setLockscreenEmergencyEnabled] = useState<boolean>(false);
 
   // Media Player states
@@ -1511,16 +1507,8 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       setUrlFilterList(savedUrlFilterList);
       setUrlFilterShowFeedback(savedUrlFilterShowFeedback);
       
-      // Load Lock Screen Quick Panel settings
-      const savedSwipeDownEnabled = bool(K.LOCKSCREEN_SWIPE_DOWN_ENABLED, false);
-      const savedSwipeDownWifi = bool(K.LOCKSCREEN_WIFI_ENABLED, false);
-      const savedSwipeDownBt = bool(K.LOCKSCREEN_BLUETOOTH_ENABLED, false);
-      const savedSwipeDownAudio = bool(K.LOCKSCREEN_AUDIO_ENABLED, false);
+      // Load Lock Screen Quick Controls settings
       const savedEmergencyEnabled = bool(K.LOCKSCREEN_EMERGENCY_CALL_ENABLED, false);
-      setLockscreenSwipeDownEnabled(savedSwipeDownEnabled);
-      setLockscreenSwipeDownWifi(savedSwipeDownWifi);
-      setLockscreenSwipeDownBt(savedSwipeDownBt);
-      setLockscreenSwipeDownAudio(savedSwipeDownAudio);
       setLockscreenEmergencyEnabled(savedEmergencyEnabled);
 
       // Load PDF Viewer setting

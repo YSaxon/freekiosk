@@ -184,7 +184,6 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [lockscreenWifiEnabled, setLockscreenWifiEnabled] = useState<boolean>(false);
   const [lockscreenBluetoothEnabled, setLockscreenBluetoothEnabled] = useState<boolean>(false);
   const [lockscreenEmergencyCallEnabled, setLockscreenEmergencyCallEnabled] = useState<boolean>(false);
-  const [lockscreenSwipeDownEnabled, setLockscreenSwipeDownEnabled] = useState<boolean>(false);
   const [lockscreenAudioEnabled, setLockscreenAudioEnabled] = useState<boolean>(false);
 
   // PDF Viewer state
@@ -592,12 +591,10 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const savedLockscreenWifi = await StorageService.getLockscreenWifiEnabled();
     const savedLockscreenBt = await StorageService.getLockscreenBluetoothEnabled();
     const savedLockscreenEmergency = await StorageService.getLockscreenEmergencyCallEnabled();
-    const savedLockscreenSwipeDown = await StorageService.getLockscreenSwipeDownEnabled();
     const savedLockscreenAudio = await StorageService.getLockscreenAudioEnabled();
     setLockscreenWifiEnabled(savedLockscreenWifi);
     setLockscreenBluetoothEnabled(savedLockscreenBt);
     setLockscreenEmergencyCallEnabled(savedLockscreenEmergency);
-    setLockscreenSwipeDownEnabled(savedLockscreenSwipeDown);
     setLockscreenAudioEnabled(savedLockscreenAudio);
 
     // PDF Viewer setting
@@ -1269,7 +1266,6 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveLockscreenWifiEnabled(lockscreenWifiEnabled);
     await StorageService.saveLockscreenBluetoothEnabled(lockscreenBluetoothEnabled);
     await StorageService.saveLockscreenEmergencyCallEnabled(lockscreenEmergencyCallEnabled);
-    await StorageService.saveLockscreenSwipeDownEnabled(lockscreenSwipeDownEnabled);
     await StorageService.saveLockscreenAudioEnabled(lockscreenAudioEnabled);
 
     // Save PDF Viewer setting
@@ -1831,8 +1827,6 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onLockscreenBluetoothEnabledChange={setLockscreenBluetoothEnabled}
             lockscreenEmergencyCallEnabled={lockscreenEmergencyCallEnabled}
             onLockscreenEmergencyCallEnabledChange={setLockscreenEmergencyCallEnabled}
-            lockscreenSwipeDownEnabled={lockscreenSwipeDownEnabled}
-            onLockscreenSwipeDownEnabledChange={setLockscreenSwipeDownEnabled}
             lockscreenAudioEnabled={lockscreenAudioEnabled}
             onLockscreenAudioEnabledChange={setLockscreenAudioEnabled}
           />

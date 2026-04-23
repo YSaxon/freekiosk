@@ -82,8 +82,6 @@ interface SecurityTabProps {
   onLockscreenBluetoothEnabledChange: (value: boolean) => void;
   lockscreenEmergencyCallEnabled: boolean;
   onLockscreenEmergencyCallEnabledChange: (value: boolean) => void;
-  lockscreenSwipeDownEnabled: boolean;
-  onLockscreenSwipeDownEnabledChange: (value: boolean) => void;
   lockscreenAudioEnabled: boolean;
   onLockscreenAudioEnabledChange: (value: boolean) => void;
 }
@@ -135,8 +133,6 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onLockscreenBluetoothEnabledChange,
   lockscreenEmergencyCallEnabled,
   onLockscreenEmergencyCallEnabledChange,
-  lockscreenSwipeDownEnabled,
-  onLockscreenSwipeDownEnabledChange,
   lockscreenAudioEnabled,
   onLockscreenAudioEnabledChange,
 }) => {
@@ -543,7 +539,6 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
           value={lockscreenEmergencyCallEnabled}
           onValueChange={onLockscreenEmergencyCallEnabledChange}
         />
-        <View style={styles.divider} />
         <View style={styles.divider} />
         <SettingsSwitch
           label="🔊 Audio controls on lock screen"

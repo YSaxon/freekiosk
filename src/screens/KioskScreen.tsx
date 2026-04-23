@@ -2117,7 +2117,6 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         }
       }
     }
-
   // N-tap detection for WebView/MediaPlayer mode - Only count dedicated 'tap' events from clicks
   // In button mode: taps are handled by the button itself, not here
   if ((displayMode === 'webview' || displayMode === 'media_player') && event?.isTap && returnMode === 'tap_anywhere') {

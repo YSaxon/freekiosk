@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Text, NativeEventEmitter, NativeModules, AppState, DeviceEventEmitter, Dimensions, Pressable, BackHandler } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Text, NativeEventEmitter, NativeModules, AppState, DeviceEventEmitter, Dimensions, Pressable, BackHandler, Keyboard } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNBrightness from '../utils/BrightnessModule';
 import { useIsFocused, useFocusEffect } from '@react-navigation/native';
@@ -85,6 +85,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const bootAppsLaunchedRef = useRef<boolean>(false); // Boot apps launched once per app session (never on Settings/PIN return)
   const tapCountRef = useRef<number>(0);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isKeyboardVisibleRef = useRef<boolean>(false);
   
   // Managed Apps (multi-app mode, background apps, accessibility whitelist)
   const [managedApps, setManagedApps] = useState<import('../types/managedApps').ManagedApp[]>([]);
@@ -112,6 +113,25 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       appLaunchTimeoutRef.current = null;
     }
   }, [isFocused]);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => {
+      isKeyboardVisibleRef.current = true;
+      tapCountRef.current = 0;
+      if (tapTimerRef.current) {
+        clearTimeout(tapTimerRef.current);
+        tapTimerRef.current = null;
+      }
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      isKeyboardVisibleRef.current = false;
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
   
   // URL Rotation states
   const [urlRotationEnabled, setUrlRotationEnabled] = useState<boolean>(false);
@@ -1983,6 +2003,15 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     // N-tap detection for WebView/MediaPlayer mode - Only count dedicated 'tap' events from clicks
     // In button mode: taps are handled by the button itself, not here
     if ((displayMode === 'webview' || displayMode === 'media_player') && event?.isTap && returnMode === 'tap_anywhere') {
+      if (isKeyboardVisibleRef.current) {
+        tapCountRef.current = 0;
+        if (tapTimerRef.current) {
+          clearTimeout(tapTimerRef.current);
+          tapTimerRef.current = null;
+        }
+        return;
+      }
+
       const now = Date.now();
       const tapX = event.x ?? 0;
       const tapY = event.y ?? 0;

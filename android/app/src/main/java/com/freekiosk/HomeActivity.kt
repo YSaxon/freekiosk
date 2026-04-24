@@ -1,8 +1,13 @@
 package com.freekiosk
 
+import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
 
 /**
  * HomeActivity - Launcher transparent pour External App Mode
@@ -14,10 +19,23 @@ import androidx.appcompat.app.AppCompatActivity
  *
  * Utilisé uniquement en mode External App (non-Device Owner)
  */
-class HomeActivity : AppCompatActivity() {
+class HomeActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        setContentView(R.layout.activity_boot_lock)
+        hideSystemUI()
 
         // Lire la configuration depuis AsyncStorage v2 database
         val displayMode = getAsyncStorageValue("@kiosk_display_mode", "webview")
@@ -139,8 +157,32 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        hideSystemUI()
         // Empêcher HomeActivity de rester visible
         finish()
+    }
+
+    private fun hideSystemUI() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                window.insetsController?.let { ctrl ->
+                    ctrl.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                    ctrl.systemBarsBehavior =
+                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        or View.SYSTEM_UI_FLAG_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
+            }
+        } catch (e: Exception) {
+            DebugLog.errorProduction("HomeActivity", "hideSystemUI failed: ${e.message}")
+        }
     }
 
     private fun getAsyncStorageValue(key: String, defaultValue: String): String {

@@ -11,6 +11,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
@@ -22,7 +23,6 @@ import java.security.MessageDigest
 import android.database.sqlite.SQLiteDatabase
 import android.content.ContentValues
 import android.view.KeyEvent
-import android.content.IntentFilter
 import android.os.Build
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -117,6 +117,7 @@ class MainActivity : ReactActivity() {
     }
 
     readExternalAppConfig()
+    syncHomeLauncherForCurrentConfig()
     ensureBootReceiverEnabled()
     hideSystemUI()
     checkAndStartLockTask()
@@ -878,6 +879,40 @@ class MainActivity : ReactActivity() {
       }
     } catch (e: Exception) {
       DebugLog.d("MainActivity", "Error ensuring BootReceiver state: ${e.message}")
+    }
+  }
+
+  internal fun syncHomeLauncherForCurrentConfig() {
+    try {
+      val homeComponent = ComponentName(this, HomeActivity::class.java)
+      val shouldOwnHome = isKioskEnabled() && isExternalAppMode
+
+      val desiredState = if (shouldOwnHome) {
+        PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+      } else {
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+      }
+      packageManager.setComponentEnabledSetting(
+        homeComponent,
+        desiredState,
+        PackageManager.DONT_KILL_APP
+      )
+
+      if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+        devicePolicyManager.clearPackagePersistentPreferredActivities(adminComponent, packageName)
+        if (shouldOwnHome) {
+          val filter = IntentFilter(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            addCategory(Intent.CATEGORY_DEFAULT)
+          }
+          devicePolicyManager.addPersistentPreferredActivity(adminComponent, filter, homeComponent)
+          DebugLog.d("MainActivity", "HomeActivity set as persistent HOME handler")
+        } else {
+          DebugLog.d("MainActivity", "Cleared persistent HOME handler")
+        }
+      }
+    } catch (e: Exception) {
+      DebugLog.errorProduction("MainActivity", "Failed to sync home launcher: ${e.message}")
     }
   }
 

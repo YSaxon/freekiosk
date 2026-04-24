@@ -181,7 +181,8 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                                 dpm.setLockTaskFeatures(adminComponent, lockTaskFeatures)
                                 android.util.Log.d("KioskModule", "Lock task features set: blockPowerButton=${!allowPowerButton}, notifications=$allowNotifications, systemInfo=$allowSystemInfo (flags=$lockTaskFeatures)")
                             }
-                            
+
+                            activity.syncHomeLauncherForCurrentConfig()
                             dpm.setLockTaskPackages(adminComponent, uniqueWhitelist.toTypedArray())
                             activity.startLockTask()
                             android.util.Log.d("KioskModule", "Full lock task started (Device Owner) with whitelist: $uniqueWhitelist")
@@ -232,6 +233,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                 activity.runOnUiThread {
                     try {
                         activity.stopLockTask()
+                        activity.syncHomeLauncherForCurrentConfig()
                         android.util.Log.d("KioskModule", "Lock task stopped")
                         promise.resolve(true)
                     } catch (e: Exception) {

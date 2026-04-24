@@ -51,6 +51,7 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
   const [pairingAddress, setPairingAddress] = useState<string | null>(null);
   const [connectingAddress, setConnectingAddress] = useState<string | null>(null);
   const [disconnectingAddress, setDisconnectingAddress] = useState<string | null>(null);
+  const [removingAddress, setRemovingAddress] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -127,6 +128,7 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
       setPairingAddress(null);
       setConnectingAddress(null);
       setDisconnectingAddress(null);
+      setRemovingAddress(null);
       setDiscovering(false);
     }
     try {
@@ -222,6 +224,47 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
     }
   };
 
+  const performRemovePairedDevice = async (device: BTDevice) => {
+    if (connectingAddress || disconnectingAddress || removingAddress || pairingAddress) return;
+    setRemovingAddress(device.address);
+    try {
+      if (device.connected) {
+        try {
+          await BluetoothControlModule.disconnectDevice(device.address);
+          updateBondedDeviceConnection(device.address, false);
+        } catch (e) {
+          console.warn('[BluetoothDialog] disconnect before unpair failed:', e);
+        }
+      }
+      const success = await BluetoothControlModule.unpairDevice(device.address);
+      if (!success) {
+        Alert.alert('Remove failed', 'Could not remove this paired device.');
+      }
+      refreshSoon();
+    } catch (e: any) {
+      Alert.alert('Remove failed', e?.message ?? 'Could not remove this paired device.');
+    } finally {
+      setRemovingAddress(null);
+    }
+  };
+
+  const handleRemovePairedDevice = (device: BTDevice) => {
+    Alert.alert(
+      'Remove paired device',
+      `Forget ${device.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            void performRemovePairedDevice(device);
+          },
+        },
+      ]
+    );
+  };
+
   const rssiToSignal = (rssi?: number) => {
     if (rssi == null) return '?';
     if (rssi >= -55) return '████';
@@ -233,9 +276,15 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
   const renderBondedDevice = ({ item }: { item: BTDevice }) => {
     const isConnecting = connectingAddress === item.address;
     const isDisconnecting = disconnectingAddress === item.address;
-    const isBusy = isConnecting || isDisconnecting;
+    const isRemoving = removingAddress === item.address;
+    const isBusy = isConnecting || isDisconnecting || isRemoving;
     return (
-      <View style={[styles.deviceRow, item.connected && styles.deviceRowConnected]}>
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onLongPress={() => handleRemovePairedDevice(item)}
+        delayLongPress={500}
+        style={[styles.deviceRow, item.connected && styles.deviceRowConnected]}
+      >
         <View style={styles.deviceInfo}>
           <Text style={styles.deviceName} numberOfLines={1}>{item.name}</Text>
           <Text style={styles.deviceAddress}>{item.address}</Text>
@@ -257,8 +306,11 @@ export default function BluetoothDialog({ visible, onClose }: Props) {
               </Text>
             )}
           </TouchableOpacity>
+          <Text style={styles.deviceHint}>
+            {isRemoving ? 'Removing…' : 'Hold to remove'}
+          </Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -518,6 +570,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1565c0',
     fontWeight: '700',
+  },
+  deviceHint: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 6,
   },
   pairBtn: {
     fontSize: 15,

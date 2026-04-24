@@ -1,9 +1,19 @@
 package com.freekiosk
 
+import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import androidx.core.content.ContextCompat
+import androidx.mediarouter.app.SystemOutputSwitcherDialogController
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -19,9 +29,15 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
     override fun getName(): String = "AudioControlModule"
 
     private var preferredOutput: String = "auto"
+    private var lastBluetoothDeviceAddress: String? = null
 
     private fun audioManager(): AudioManager =
         reactContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    private fun bluetoothAdapter(): BluetoothAdapter? {
+        val manager = reactContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        return manager?.adapter
+    }
 
     // ─── State snapshot ───────────────────────────────────────────────────────
 
@@ -116,73 +132,265 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
     fun setAudioOutput(outputType: String, promise: Promise) {
         try {
             val am = audioManager()
-            when (outputType) {
+            val outputKind = outputType.substringBefore("::")
+            val outputAddress = outputType.substringAfter("::", "").ifBlank { null }
+
+            when (outputKind) {
                 "speaker" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        // Find built-in speaker via AudioDeviceInfo
-                        val speaker = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-                            .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                        if (speaker != null) {
-                            am.setCommunicationDevice(speaker)
-                        }
+                    disconnectBluetoothAudioDevices(outputAddress) {
+                        forceSpeakerRoute(am)
+                        preferredOutput = "speaker"
+                        promise.resolve(true)
                     }
-                    // Also apply legacy path for full-stack coverage
-                    am.stopBluetoothSco()
-                    am.isBluetoothScoOn = false
-                    am.mode = AudioManager.MODE_IN_COMMUNICATION
-                    am.isSpeakerphoneOn = true
-                    preferredOutput = "speaker"
-                    promise.resolve(true)
                 }
                 "auto" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        am.clearCommunicationDevice()
+                    clearExplicitRoute(am)
+                    reconnectRememberedBluetoothDeviceIfNeeded(null) {
+                        preferredOutput = "auto"
+                        promise.resolve(true)
                     }
-                    am.stopBluetoothSco()
-                    am.isBluetoothScoOn = false
-                    am.isSpeakerphoneOn = false
-                    am.mode = AudioManager.MODE_NORMAL
-                    preferredOutput = "auto"
-                    promise.resolve(true)
                 }
-                "bluetooth_sco" -> {
-                    am.mode = AudioManager.MODE_IN_COMMUNICATION
-                    am.isSpeakerphoneOn = false
-                    am.startBluetoothSco()
-                    am.isBluetoothScoOn = true
-                    preferredOutput = "bluetooth_sco"
-                    promise.resolve(true)
+                "bluetooth_sco",
+                "bluetooth_a2dp" -> {
+                    clearExplicitRoute(am)
+                    reconnectRememberedBluetoothDeviceIfNeeded(outputAddress) { connected ->
+                        preferredOutput = outputKind
+                        promise.resolve(connected || outputAddress == null)
+                    }
                 }
-                "bluetooth_a2dp",
                 "wired_headphones",
                 "wired_headset",
                 "usb_headset",
                 "hdmi" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        am.clearCommunicationDevice()
-                    }
-                    am.stopBluetoothSco()
-                    am.isBluetoothScoOn = false
-                    am.isSpeakerphoneOn = false
-                    am.mode = AudioManager.MODE_NORMAL
-                    preferredOutput = outputType
+                    clearExplicitRoute(am)
+                    preferredOutput = outputKind
                     promise.resolve(true)
                 }
                 else -> {
-                    // Unknown type — fall back to auto
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        am.clearCommunicationDevice()
+                    clearExplicitRoute(am)
+                    reconnectRememberedBluetoothDeviceIfNeeded(null) {
+                        preferredOutput = "auto"
+                        promise.resolve(true)
                     }
-                    am.stopBluetoothSco()
-                    am.isBluetoothScoOn = false
-                    am.isSpeakerphoneOn = false
-                    am.mode = AudioManager.MODE_NORMAL
-                    preferredOutput = "auto"
-                    promise.resolve(true)
                 }
             }
         } catch (e: Exception) {
             promise.reject("ROUTING_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun showSystemOutputSwitcher(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                promise.resolve(false)
+                return
+            }
+
+            val context = reactContext.currentActivity ?: reactContext
+            promise.resolve(SystemOutputSwitcherDialogController.showDialog(context))
+        } catch (e: Exception) {
+            promise.reject("OUTPUT_SWITCHER_ERROR", e.message, e)
+        }
+    }
+
+    private fun forceSpeakerRoute(am: AudioManager) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val speaker = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+            if (speaker != null) {
+                am.setCommunicationDevice(speaker)
+            }
+        }
+        am.stopBluetoothSco()
+        am.isBluetoothScoOn = false
+        am.mode = AudioManager.MODE_IN_COMMUNICATION
+        am.isSpeakerphoneOn = true
+    }
+
+    private fun clearExplicitRoute(am: AudioManager) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            am.clearCommunicationDevice()
+        }
+        am.stopBluetoothSco()
+        am.isBluetoothScoOn = false
+        am.isSpeakerphoneOn = false
+        am.mode = AudioManager.MODE_NORMAL
+    }
+
+    private fun hasBluetoothConnectPermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(
+                reactContext,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun getConnectedBluetoothAudioDevices(): List<BluetoothDevice> {
+        val adapter = bluetoothAdapter() ?: return emptyList()
+        if (!hasBluetoothConnectPermission()) return emptyList()
+
+        return try {
+            adapter.bondedDevices
+                ?.filter { isBluetoothDeviceConnected(it) }
+                ?.toList()
+                .orEmpty()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun isBluetoothDeviceConnected(device: BluetoothDevice): Boolean {
+        return try {
+            val method = device.javaClass.getMethod("isConnected")
+            method.invoke(device) as? Boolean ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun disconnectBluetoothAudioDevices(
+        preferredAddress: String?,
+        onComplete: (Boolean) -> Unit
+    ) {
+        val connectedDevices = getConnectedBluetoothAudioDevices()
+        if (connectedDevices.isEmpty()) {
+            onComplete(false)
+            return
+        }
+
+        val targetDevices = buildList {
+            preferredAddress?.let { address ->
+                connectedDevices.firstOrNull { it.address.equals(address, ignoreCase = true) }?.let { add(it) }
+            }
+            connectedDevices.forEach { device ->
+                if (none { it.address.equals(device.address, ignoreCase = true) }) add(device)
+            }
+        }
+
+        lastBluetoothDeviceAddress = targetDevices.firstOrNull()?.address ?: lastBluetoothDeviceAddress
+        changeBluetoothDevicesConnection(targetDevices, "disconnect", onComplete)
+    }
+
+    private fun reconnectRememberedBluetoothDeviceIfNeeded(
+        preferredAddress: String?,
+        onComplete: (Boolean) -> Unit
+    ) {
+        val adapter = bluetoothAdapter()
+        if (adapter == null || !adapter.isEnabled || !hasBluetoothConnectPermission()) {
+            onComplete(false)
+            return
+        }
+
+        val connectedDevices = getConnectedBluetoothAudioDevices()
+        if (connectedDevices.isNotEmpty()) {
+            preferredAddress?.let { lastBluetoothDeviceAddress = it }
+            onComplete(true)
+            return
+        }
+
+        val targetAddress = preferredAddress ?: lastBluetoothDeviceAddress
+        if (targetAddress.isNullOrBlank()) {
+            onComplete(false)
+            return
+        }
+
+        val device = try {
+            adapter.getRemoteDevice(targetAddress)
+        } catch (_: Exception) {
+            null
+        }
+
+        if (device == null) {
+            onComplete(false)
+            return
+        }
+
+        lastBluetoothDeviceAddress = device.address
+        changeBluetoothDevicesConnection(listOf(device), "connect", onComplete)
+    }
+
+    private fun changeBluetoothDevicesConnection(
+        devices: List<BluetoothDevice>,
+        methodName: String,
+        onComplete: (Boolean) -> Unit
+    ) {
+        val adapter = bluetoothAdapter()
+        if (adapter == null || devices.isEmpty() || !hasBluetoothConnectPermission()) {
+            onComplete(false)
+            return
+        }
+
+        val profiles = mutableListOf(
+            BluetoothProfile.HEADSET,
+            BluetoothProfile.A2DP
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            profiles.add(BluetoothProfile.HEARING_AID)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            profiles.add(BluetoothProfile.LE_AUDIO)
+        }
+
+        val totalRequests = devices.size * profiles.size
+        if (totalRequests == 0) {
+            onComplete(false)
+            return
+        }
+
+        val handler = Handler(Looper.getMainLooper())
+        var pending = totalRequests
+        var invoked = false
+        var succeeded = false
+        var finished = false
+
+        fun finish() {
+            if (finished) return
+            finished = true
+            handler.removeCallbacksAndMessages(null)
+            onComplete(succeeded || invoked)
+        }
+
+        val timeout = Runnable { finish() }
+        handler.postDelayed(timeout, 3000)
+
+        devices.forEach { device ->
+            profiles.forEach { profile ->
+                val listener = object : BluetoothProfile.ServiceListener {
+                    override fun onServiceConnected(profileId: Int, proxy: BluetoothProfile) {
+                        try {
+                            val method = proxy.javaClass.getMethod(methodName, BluetoothDevice::class.java)
+                            val result = method.invoke(proxy, device) as? Boolean ?: false
+                            invoked = true
+                            if (result) succeeded = true
+                        } catch (_: Exception) {
+                        } finally {
+                            try {
+                                adapter.closeProfileProxy(profileId, proxy)
+                            } catch (_: Exception) {
+                            }
+                            pending -= 1
+                            if (pending <= 0) finish()
+                        }
+                    }
+
+                    override fun onServiceDisconnected(profileId: Int) {
+                        pending -= 1
+                        if (pending <= 0) finish()
+                    }
+                }
+
+                val requested = try {
+                    adapter.getProfileProxy(reactContext, listener, profile)
+                } catch (_: Exception) {
+                    false
+                }
+
+                if (!requested) {
+                    pending -= 1
+                    if (pending <= 0) finish()
+                }
+            }
         }
     }
 
@@ -268,7 +476,7 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
                 .forEach { dev ->
                     val name = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) dev.productName?.toString() else null
                     arr.pushMap(makeOutput(
-                        "bluetooth_a2dp",
+                        "bluetooth_a2dp::${dev.address}",
                         name ?: "Bluetooth (A2DP)",
                         "bluetooth_a2dp"
                     ))
@@ -278,7 +486,7 @@ class AudioControlModule(private val reactContext: ReactApplicationContext) :
                 .forEach { dev ->
                     val name = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) dev.productName?.toString() else null
                     arr.pushMap(makeOutput(
-                        "bluetooth_sco",
+                        "bluetooth_sco::${dev.address}",
                         name ?: "Bluetooth Headset",
                         "bluetooth_sco"
                     ))

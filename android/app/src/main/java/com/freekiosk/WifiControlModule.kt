@@ -20,7 +20,6 @@ import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -99,8 +98,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
 
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || isDeviceOwner()) {
                 // Pre-Android 10 allows direct toggles. Device-owner kiosk builds
-                // may also be allowed on newer Android versions, so try it before
-                // falling back to the system-panel path.
+                // may also be allowed on newer Android versions, so try it directly.
                 @Suppress("DEPRECATION")
                 val success = try {
                     wifiManager.setWifiEnabled(enabled)
@@ -114,8 +112,7 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
                 promise.resolve(result)
             } else {
                 // Android 10+: setWifiEnabled() is blocked for non-system apps.
-                // We return requiresSystemPanel=true so the JS layer can open the
-                // Settings.Panel.ACTION_WIFI overlay via openSystemWifiPanel().
+                // FreeKiosk uses its in-app WiFi UI in this case.
                 val result = Arguments.createMap()
                 result.putBoolean("success", false)
                 result.putBoolean("requiresSystemPanel", true)
@@ -132,31 +129,6 @@ class WifiControlModule(private val reactContext: ReactApplicationContext) :
             dpm.isDeviceOwnerApp(reactContext.packageName)
         } catch (_: Exception) {
             false
-        }
-    }
-
-    // Opens the Android 10+ WiFi settings panel as a bottom-sheet overlay.
-    // This is the only safe way to let users toggle WiFi on Android 10+ without
-    // giving access to all of Settings.
-    @ReactMethod
-    fun openSystemWifiPanel(promise: Promise) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val intent = Intent(Settings.Panel.ACTION_WIFI).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                reactContext.startActivity(intent)
-                promise.resolve(true)
-            } else {
-                // Pre-10: open the WiFi-only settings page (not all of Settings)
-                val intent = Intent(Settings.ACTION_WIFI_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                reactContext.startActivity(intent)
-                promise.resolve(true)
-            }
-        } catch (e: Exception) {
-            promise.reject("WIFI_PANEL_ERROR", e.message, e)
         }
     }
 

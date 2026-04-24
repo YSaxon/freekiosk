@@ -15,7 +15,7 @@ import WifiDialog from './WifiDialog';
 import BluetoothDialog from './BluetoothDialog';
 import AudioOutputDialog from './AudioOutputDialog';
 
-const { KioskModule } = NativeModules;
+const { KioskModule, AudioControlModule } = NativeModules;
 
 interface PinInputProps {
   onSuccess: () => void;
@@ -152,6 +152,25 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
     }
   };
 
+  const handleAudioPress = async (): Promise<void> => {
+    try {
+      if (AudioControlModule?.showSystemOutputSwitcher) {
+        const shown = await AudioControlModule.showSystemOutputSwitcher();
+        if (shown) {
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[PinInput] showSystemOutputSwitcher error:', e);
+    }
+
+    setAudioDialogVisible(true);
+  };
+
+  const handleWifiPress = async (): Promise<void> => {
+    setWifiDialogVisible(true);
+  };
+
   const formatTime = (milliseconds: number): string => {
     const minutes = Math.floor(milliseconds / 60000);
     const seconds = Math.floor((milliseconds % 60000) / 1000);
@@ -230,7 +249,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
           {showWifiButton && (
             <TouchableOpacity
               style={styles.quickBtn}
-              onPress={() => setWifiDialogVisible(true)}
+              onPress={handleWifiPress}
             >
               <Text style={styles.quickBtnIcon}>📶</Text>
               <Text style={styles.quickBtnLabel}>Wi-Fi</Text>
@@ -250,7 +269,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
           {showAudioControls && (
             <TouchableOpacity
               style={styles.quickBtn}
-              onPress={() => setAudioDialogVisible(true)}
+              onPress={handleAudioPress}
             >
               <Text style={styles.quickBtnIcon}>🔊</Text>
               <Text style={styles.quickBtnLabel}>Audio</Text>

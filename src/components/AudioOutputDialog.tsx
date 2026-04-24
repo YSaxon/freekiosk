@@ -61,9 +61,9 @@ export default function AudioOutputDialog({ visible, onClose }: Props) {
     if (visible) refreshAudio();
   }, [visible, refreshAudio]);
 
-  const handleSelectOutput = async (outputId: string) => {
+  const handleSelectOutput = async (output: AudioOutput) => {
     try {
-      await AudioControlModule.setAudioOutput(outputId);
+      await AudioControlModule.setAudioOutput(output.id);
       onClose();
     } catch (e) {
       console.warn('[AudioOutputDialog] setAudioOutput error:', e);
@@ -103,7 +103,7 @@ export default function AudioOutputDialog({ visible, onClose }: Props) {
                   <TouchableOpacity
                     key={`${out.id}-${out.label}`}
                     style={[styles.row, isActive && styles.rowActive]}
-                    onPress={() => handleSelectOutput(out.id)}
+                    onPress={() => handleSelectOutput(out)}
                   >
                     <Text style={styles.rowIcon}>{OUTPUT_ICONS[out.type] ?? '🔈'}</Text>
                     <Text style={[styles.rowLabel, isActive && styles.rowLabelActive]}>{out.label}</Text>

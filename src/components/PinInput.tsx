@@ -14,8 +14,9 @@ import { StorageService } from '../utils/storage';
 import WifiDialog from './WifiDialog';
 import BluetoothDialog from './BluetoothDialog';
 import AudioOutputDialog from './AudioOutputDialog';
+import BrightnessDialog from './BrightnessDialog';
 
-const { KioskModule, AudioControlModule } = NativeModules;
+const { KioskModule, AudioControlModule, FlashlightModule } = NativeModules;
 
 interface PinInputProps {
   onSuccess: () => void;
@@ -37,11 +38,17 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   const [showBluetoothButton, setShowBluetoothButton] = useState(false);
   const [showAudioControls, setShowAudioControls] = useState(false);
   const [showEmergencyButton, setShowEmergencyButton] = useState(false);
+  const [showFlashlightButton, setShowFlashlightButton] = useState(false);
+  const [showBrightnessButton, setShowBrightnessButton] = useState(false);
 
   // Dialog visibility
   const [wifiDialogVisible, setWifiDialogVisible] = useState(false);
   const [bluetoothDialogVisible, setBluetoothDialogVisible] = useState(false);
   const [audioDialogVisible, setAudioDialogVisible] = useState(false);
+  const [brightnessDialogVisible, setBrightnessDialogVisible] = useState(false);
+  const [flashlightAvailable, setFlashlightAvailable] = useState(false);
+  const [flashlightOn, setFlashlightOn] = useState(false);
+  const [flashlightBusy, setFlashlightBusy] = useState(false);
 
   useEffect(() => {
     checkLockoutStatus();
@@ -55,16 +62,34 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   }, []);
 
   const loadLockscreenSettings = async (): Promise<void> => {
-    const [wifi, bt, audio, emergency] = await Promise.all([
+    const [wifi, bt, audio, emergency, flashlight, brightness] = await Promise.all([
       StorageService.getLockscreenWifiEnabled(),
       StorageService.getLockscreenBluetoothEnabled(),
       StorageService.getLockscreenAudioEnabled(),
       StorageService.getLockscreenEmergencyCallEnabled(),
+      StorageService.getLockscreenFlashlightEnabled(),
+      StorageService.getLockscreenBrightnessEnabled(),
     ]);
     setShowWifiButton(wifi);
     setShowBluetoothButton(bt);
     setShowAudioControls(audio);
     setShowEmergencyButton(emergency);
+    setShowFlashlightButton(flashlight);
+    setShowBrightnessButton(brightness);
+
+    if (flashlight && FlashlightModule?.isAvailable) {
+      try {
+        const available = await FlashlightModule.isAvailable();
+        setFlashlightAvailable(Boolean(available));
+        if (available && FlashlightModule?.getState) {
+          const enabled = await FlashlightModule.getState();
+          setFlashlightOn(Boolean(enabled));
+        }
+      } catch (e) {
+        console.warn('[PinInput] flashlight availability error:', e);
+        setFlashlightAvailable(false);
+      }
+    }
   };
 
   const handlePinChange = (text: string): void => {
@@ -171,13 +196,39 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
     setWifiDialogVisible(true);
   };
 
+  const handleFlashlightPress = async (): Promise<void> => {
+    if (!FlashlightModule?.setEnabled || flashlightBusy) {
+      return;
+    }
+
+    const next = !flashlightOn;
+    setFlashlightBusy(true);
+    setFlashlightOn(next);
+    try {
+      const result = await FlashlightModule.setEnabled(next);
+      setFlashlightOn(Boolean(result));
+    } catch (e) {
+      console.warn('[PinInput] flashlight toggle error:', e);
+      setFlashlightOn(!next);
+      Alert.alert('Flashlight', 'Unable to change flashlight state.');
+    } finally {
+      setFlashlightBusy(false);
+    }
+  };
+
   const formatTime = (milliseconds: number): string => {
     const minutes = Math.floor(milliseconds / 60000);
     const seconds = Math.floor((milliseconds % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const hasQuickControls = showWifiButton || showBluetoothButton || showAudioControls || showEmergencyButton;
+  const hasQuickControls =
+    showWifiButton ||
+    showBluetoothButton ||
+    showAudioControls ||
+    showEmergencyButton ||
+    (showFlashlightButton && flashlightAvailable) ||
+    showBrightnessButton;
 
   return (
     <View style={styles.container}>
@@ -220,7 +271,6 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
             maxLength={pinMode === 'alphanumeric' ? undefined : 6}
             placeholder={pinMode === 'alphanumeric' ? 'Enter password' : '••••'}
             placeholderTextColor="#999999"
-            autoFocus
             autoCapitalize={pinMode === 'alphanumeric' ? 'none' : undefined}
             autoCorrect={false}
             autoComplete="off"
@@ -276,6 +326,27 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
             </TouchableOpacity>
           )}
 
+          {showFlashlightButton && flashlightAvailable && (
+            <TouchableOpacity
+              style={[styles.quickBtn, flashlightOn && styles.quickBtnActive]}
+              onPress={handleFlashlightPress}
+              disabled={flashlightBusy}
+            >
+              <Text style={styles.quickBtnIcon}>{flashlightOn ? '💡' : '🔦'}</Text>
+              <Text style={styles.quickBtnLabel}>{flashlightOn ? 'Light Off' : 'Light On'}</Text>
+            </TouchableOpacity>
+          )}
+
+          {showBrightnessButton && (
+            <TouchableOpacity
+              style={styles.quickBtn}
+              onPress={() => setBrightnessDialogVisible(true)}
+            >
+              <Text style={styles.quickBtnIcon}>☀️</Text>
+              <Text style={styles.quickBtnLabel}>Brightness</Text>
+            </TouchableOpacity>
+          )}
+
           {showEmergencyButton && (
             <TouchableOpacity
               style={[styles.quickBtn, styles.emergencyBtn]}
@@ -300,6 +371,10 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
       <AudioOutputDialog
         visible={audioDialogVisible}
         onClose={() => setAudioDialogVisible(false)}
+      />
+      <BrightnessDialog
+        visible={brightnessDialogVisible}
+        onClose={() => setBrightnessDialogVisible(false)}
       />
     </View>
   );
@@ -408,16 +483,14 @@ const styles = StyleSheet.create({
   },
   // Quick controls
   quickControls: {
-    position: 'absolute',
-    bottom: 32,
     width: '100%',
+    maxWidth: 320,
     flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     rowGap: 10,
-    columnGap: 8,
-    paddingHorizontal: 16,
+    marginTop: 28,
   },
   quickBtn: {
     alignItems: 'center',
@@ -427,10 +500,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 8,
     elevation: 3,
-    width: 78,
+    width: '31%',
     minHeight: 72,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  quickBtnActive: {
+    borderColor: '#f0b400',
+    backgroundColor: '#fff7d6',
   },
   quickBtnIcon: {
     fontSize: 28,

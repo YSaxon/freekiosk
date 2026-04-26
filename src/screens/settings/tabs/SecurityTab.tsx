@@ -84,6 +84,10 @@ interface SecurityTabProps {
   onLockscreenEmergencyCallEnabledChange: (value: boolean) => void;
   lockscreenAudioEnabled: boolean;
   onLockscreenAudioEnabledChange: (value: boolean) => void;
+  lockscreenFlashlightEnabled: boolean;
+  onLockscreenFlashlightEnabledChange: (value: boolean) => void;
+  lockscreenBrightnessEnabled: boolean;
+  onLockscreenBrightnessEnabledChange: (value: boolean) => void;
 }
 
 const SecurityTab: React.FC<SecurityTabProps> = ({
@@ -135,6 +139,10 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onLockscreenEmergencyCallEnabledChange,
   lockscreenAudioEnabled,
   onLockscreenAudioEnabledChange,
+  lockscreenFlashlightEnabled,
+  onLockscreenFlashlightEnabledChange,
+  lockscreenBrightnessEnabled,
+  onLockscreenBrightnessEnabledChange,
 }) => {
   return (
     <View>
@@ -545,6 +553,20 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
           hint="Show mute and audio output selector on the PIN screen."
           value={lockscreenAudioEnabled}
           onValueChange={onLockscreenAudioEnabledChange}
+        />
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="🔦 Flashlight button on lock screen"
+          hint="Show a flashlight toggle on the PIN entry screen."
+          value={lockscreenFlashlightEnabled}
+          onValueChange={onLockscreenFlashlightEnabledChange}
+        />
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="☀️ Brightness control on lock screen"
+          hint="Show a brightness button on the PIN entry screen. Opens a slider."
+          value={lockscreenBrightnessEnabled}
+          onValueChange={onLockscreenBrightnessEnabledChange}
         />
       </SettingsSection>
 

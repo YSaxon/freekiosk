@@ -36,6 +36,7 @@ class MainApplication : Application(), ReactApplication {
           add(WifiControlPackage())
           add(BluetoothControlPackage())
           add(AudioControlPackage())
+          add(FlashlightPackage())
         },
     )
   }

@@ -132,6 +132,8 @@ class OverlayService : Service() {
     private var requiredTaps = 5 // Default, will be overridden from intent
     private var returnMode = "tap_anywhere" // 'tap_anywhere' or 'button'
     private var buttonPosition = "bottom-right" // 'top-left', 'top-right', 'bottom-left', 'bottom-right'
+    private var buttonXPercent = 92.0
+    private var buttonYPercent = 92.0
     private val CHANNEL_ID = "FreeKioskOverlay"
     private val NOTIFICATION_ID = 1001
     private val STATUS_UPDATE_INTERVAL = 15000L // Update every 15 seconds (was 5s, reduced for low-end device performance)
@@ -322,6 +324,8 @@ class OverlayService : Service() {
         // Track if overlay parameters changed — avoid unnecessary destroy/recreate
         val oldReturnMode = returnMode
         val oldButtonPosition = buttonPosition
+        val oldButtonXPercent = buttonXPercent
+        val oldButtonYPercent = buttonYPercent
 
         // Get required taps from intent (default 5)
         intent.getIntExtra("REQUIRED_TAPS", 5).let { taps ->
@@ -346,6 +350,10 @@ class OverlayService : Service() {
             buttonPosition = position
             DebugLog.d("OverlayService", "Button position set to: $buttonPosition")
         }
+
+        buttonXPercent = intent.getDoubleExtra("BUTTON_X_PERCENT", buttonXPercent).coerceIn(0.0, 100.0)
+        buttonYPercent = intent.getDoubleExtra("BUTTON_Y_PERCENT", buttonYPercent).coerceIn(0.0, 100.0)
+        DebugLog.d("OverlayService", "Button coordinates set to: x=$buttonXPercent y=$buttonYPercent")
         
         // Get locked package and auto-relaunch settings for monitoring
         intent.getStringExtra("LOCKED_PACKAGE")?.let { pkg ->
@@ -381,7 +389,11 @@ class OverlayService : Service() {
         val hasOverlayPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
         
         // Only recreate overlay if parameters changed or overlay doesn't exist
-        val overlayParamsChanged = returnMode != oldReturnMode || buttonPosition != oldButtonPosition
+        val overlayParamsChanged =
+            returnMode != oldReturnMode ||
+            buttonPosition != oldButtonPosition ||
+            buttonXPercent != oldButtonXPercent ||
+            buttonYPercent != oldButtonYPercent
         if (hasOverlayPermission) {
             if (overlayView != null && overlayParamsChanged) {
                 DebugLog.d("OverlayService", "Overlay params changed, recreating")
@@ -421,6 +433,7 @@ class OverlayService : Service() {
         val density = resources.displayMetrics.density
         val buttonSizePx = (buttonSize * density).toInt()
         val marginPx = (8 * density).toInt()
+        val useCustomPosition = buttonPosition == "custom"
         
         val buttonView = FrameLayout(this).apply {
             returnButton = Button(context).apply {
@@ -444,9 +457,13 @@ class OverlayService : Service() {
                 buttonSizePx,
                 buttonSizePx
             ).apply {
-                gravity = getButtonGravity()
-                val (marginH, marginV) = getButtonMargins(marginPx)
-                setMargins(marginH, marginV, marginH, marginV)
+                gravity = if (useCustomPosition) Gravity.TOP or Gravity.START else getButtonGravity()
+                if (useCustomPosition) {
+                    setMargins(0, 0, 0, 0)
+                } else {
+                    val (marginH, marginV) = getButtonMargins(marginPx)
+                    setMargins(marginH, marginV, marginH, marginV)
+                }
             })
         }
 
@@ -463,7 +480,12 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = getButtonGravity()
+            gravity = if (useCustomPosition) Gravity.TOP or Gravity.START else getButtonGravity()
+            if (useCustomPosition) {
+                val (offsetX, offsetY) = getCustomButtonOffsets(buttonSizePx, marginPx)
+                x = offsetX
+                y = offsetY
+            }
         }
 
         try {
@@ -484,6 +506,19 @@ class OverlayService : Service() {
             "bottom-right" -> Gravity.BOTTOM or Gravity.END
             else -> Gravity.BOTTOM or Gravity.END
         }
+    }
+
+    private fun getCustomButtonOffsets(buttonSizePx: Int, marginPx: Int): Pair<Int, Int> {
+        val displayMetrics = resources.displayMetrics
+        val availableWidth = (displayMetrics.widthPixels - buttonSizePx).coerceAtLeast(0)
+        val availableHeight = (displayMetrics.heightPixels - buttonSizePx).coerceAtLeast(0)
+        val minX = marginPx
+        val minY = marginPx
+        val maxX = (availableWidth - marginPx).coerceAtLeast(minX)
+        val maxY = (availableHeight - marginPx).coerceAtLeast(minY)
+        val rawX = (availableWidth * (buttonXPercent / 100.0)).toInt()
+        val rawY = (availableHeight * (buttonYPercent / 100.0)).toInt()
+        return Pair(rawX.coerceIn(minX, maxX), rawY.coerceIn(minY, maxY))
     }
     
     private fun getButtonMargins(marginPx: Int): Pair<Int, Int> {

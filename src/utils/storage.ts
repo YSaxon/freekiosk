@@ -68,6 +68,8 @@ const KEYS = {
   RETURN_TAP_TIMEOUT: '@kiosk_return_tap_timeout',
   RETURN_MODE: '@kiosk_return_mode', // 'tap_anywhere' | 'button'
   RETURN_BUTTON_POSITION: '@kiosk_return_button_position', // 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  RETURN_BUTTON_X_PERCENT: '@kiosk_return_button_x_percent',
+  RETURN_BUTTON_Y_PERCENT: '@kiosk_return_button_y_percent',
   VOLUME_UP_5TAP_ENABLED: '@kiosk_volume_up_5tap_enabled',
   // Blocking Overlays
   BLOCKING_OVERLAYS_ENABLED: '@kiosk_blocking_overlays_enabled',
@@ -323,6 +325,8 @@ export const StorageService = {
         KEYS.RETURN_TAP_TIMEOUT,
         KEYS.RETURN_MODE,
         KEYS.RETURN_BUTTON_POSITION,
+        KEYS.RETURN_BUTTON_X_PERCENT,
+        KEYS.RETURN_BUTTON_Y_PERCENT,
         // Camera preference
         KEYS.MOTION_CAMERA_POSITION,
         // WebView Back Button

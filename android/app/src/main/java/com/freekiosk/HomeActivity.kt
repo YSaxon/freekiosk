@@ -33,14 +33,16 @@ class HomeActivity : AppCompatActivity() {
         // Load return mode settings
         val returnMode = getAsyncStorageValue("@kiosk_return_mode", "tap_anywhere")
         val buttonPosition = getAsyncStorageValue("@kiosk_return_button_position", "bottom-right")
+        val buttonXPercent = getAsyncStorageValue("@kiosk_return_button_x_percent", "92").toDoubleOrNull() ?: 92.0
+        val buttonYPercent = getAsyncStorageValue("@kiosk_return_button_y_percent", "92").toDoubleOrNull() ?: 92.0
 
         DebugLog.d("HomeActivity", "Display mode: $displayMode")
         DebugLog.d("HomeActivity", "External app: $externalAppPackage / $externalAppActivity")
-        DebugLog.d("HomeActivity", "Tap settings: count=$tapCount, timeout=${tapTimeout}ms, mode=$returnMode, position=$buttonPosition")
+        DebugLog.d("HomeActivity", "Tap settings: count=$tapCount, timeout=${tapTimeout}ms, mode=$returnMode, position=$buttonPosition, x=$buttonXPercent, y=$buttonYPercent")
 
         if (displayMode == "external_app" && !externalAppPackage.isNullOrEmpty()) {
             // Démarrer l'OverlayService avec le bouton de retour
-            startOverlayService(tapCount, tapTimeout, returnMode, buttonPosition)
+            startOverlayService(tapCount, tapTimeout, returnMode, buttonPosition, buttonXPercent, buttonYPercent)
 
             // Start MainActivity in background (for REST API server, MQTT, etc.)
             startMainActivityInBackground()
@@ -77,7 +79,14 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    private fun startOverlayService(tapCount: Int, tapTimeout: Long, returnMode: String, buttonPosition: String) {
+    private fun startOverlayService(
+        tapCount: Int,
+        tapTimeout: Long,
+        returnMode: String,
+        buttonPosition: String,
+        buttonXPercent: Double,
+        buttonYPercent: Double
+    ) {
         try {
             // Vérifier la permission overlay (Android M+)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
@@ -92,8 +101,10 @@ class HomeActivity : AppCompatActivity() {
             serviceIntent.putExtra("TAP_TIMEOUT", tapTimeout.coerceIn(500L, 5000L))
             serviceIntent.putExtra("RETURN_MODE", returnMode)
             serviceIntent.putExtra("BUTTON_POSITION", buttonPosition)
+            serviceIntent.putExtra("BUTTON_X_PERCENT", buttonXPercent.coerceIn(0.0, 100.0))
+            serviceIntent.putExtra("BUTTON_Y_PERCENT", buttonYPercent.coerceIn(0.0, 100.0))
             startService(serviceIntent)
-            DebugLog.d("HomeActivity", "Started OverlayService from HomeActivity with tapCount=$tapCount, tapTimeout=${tapTimeout}ms, mode=$returnMode, position=$buttonPosition")
+            DebugLog.d("HomeActivity", "Started OverlayService from HomeActivity with tapCount=$tapCount, tapTimeout=${tapTimeout}ms, mode=$returnMode, position=$buttonPosition, x=$buttonXPercent, y=$buttonYPercent")
         } catch (e: Exception) {
             DebugLog.errorProduction("HomeActivity", "Error starting OverlayService: ${e.message}")
         }

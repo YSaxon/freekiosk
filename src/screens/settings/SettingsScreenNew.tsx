@@ -128,6 +128,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [returnTapCount, setReturnTapCount] = useState<string>('5');
   const [returnTapTimeout, setReturnTapTimeout] = useState<string>('1500');
   const [returnButtonPosition, setReturnButtonPosition] = useState<string>('bottom-right');
+  const [returnButtonXPercent, setReturnButtonXPercent] = useState<number>(92);
+  const [returnButtonYPercent, setReturnButtonYPercent] = useState<number>(92);
   const [volumeUp5TapEnabled, setVolumeUp5TapEnabled] = useState<boolean>(true);
   
   // URL Rotation states
@@ -477,6 +479,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const savedReturnTapCount = await StorageService.getReturnTapCount();
     const savedReturnTapTimeout = await StorageService.getReturnTapTimeout();
     const savedReturnButtonPosition = await StorageService.getReturnButtonPosition();
+    const savedReturnButtonXPercent = await StorageService.getReturnButtonXPercent();
+    const savedReturnButtonYPercent = await StorageService.getReturnButtonYPercent();
     const savedVolumeUp5TapEnabled = await StorageService.getVolumeUp5TapEnabled();
     
     // URL Rotation settings
@@ -545,6 +549,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     setReturnTapCount(String(savedReturnTapCount));
     setReturnTapTimeout(String(savedReturnTapTimeout));
     setReturnButtonPosition(savedReturnButtonPosition);
+    setReturnButtonXPercent(savedReturnButtonXPercent);
+    setReturnButtonYPercent(savedReturnButtonYPercent);
     setVolumeUp5TapEnabled(savedVolumeUp5TapEnabled);
     setUrlRotationEnabled(savedUrlRotationEnabled);
     setUrlRotationList(savedUrlRotationList);
@@ -1234,6 +1240,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const tapTimeout = parseInt(returnTapTimeout, 10);
     await StorageService.saveReturnTapTimeout(isNaN(tapTimeout) ? 1500 : Math.max(500, Math.min(5000, tapTimeout)));
     await StorageService.saveReturnButtonPosition(returnButtonPosition);
+    await StorageService.saveReturnButtonXPercent(returnButtonXPercent);
+    await StorageService.saveReturnButtonYPercent(returnButtonYPercent);
     await StorageService.saveVolumeUp5TapEnabled(volumeUp5TapEnabled);
     
     // Save Dashboard settings
@@ -1275,6 +1283,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveLockscreenAudioEnabled(lockscreenAudioEnabled);
     await StorageService.saveLockscreenFlashlightEnabled(lockscreenFlashlightEnabled);
     await StorageService.saveLockscreenBrightnessEnabled(lockscreenBrightnessEnabled);
+    await StorageService.saveLockscreenRotationLockEnabled(lockscreenRotationLockEnabled);
 
     // Save PDF Viewer setting
     await StorageService.savePdfViewerEnabled(pdfViewerEnabled);
@@ -1332,6 +1341,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
           finalTapTimeout, 
           returnMode, 
           returnButtonPosition,
+          returnButtonXPercent,
+          returnButtonYPercent,
           externalAppPackage,
           autoRelaunchApp,
           allowNotifications
@@ -1427,6 +1438,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
               setReturnTapCount('5');
               setReturnTapTimeout('1500');
               setReturnButtonPosition('bottom-right');
+              setReturnButtonXPercent(92);
+              setReturnButtonYPercent(92);
               
               // Reset auto-brightness state
               setAutoBrightnessEnabled(false);
@@ -1808,6 +1821,10 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onReturnTapTimeoutChange={setReturnTapTimeout}
             returnButtonPosition={returnButtonPosition}
             onReturnButtonPositionChange={setReturnButtonPosition}
+            returnButtonXPercent={returnButtonXPercent}
+            onReturnButtonXPercentChange={setReturnButtonXPercent}
+            returnButtonYPercent={returnButtonYPercent}
+            onReturnButtonYPercentChange={setReturnButtonYPercent}
             overlayButtonVisible={overlayButtonVisible}
             onOverlayButtonVisibleChange={handleOverlayButtonVisibleChange}
             volumeUp5TapEnabled={volumeUp5TapEnabled}
@@ -1841,6 +1858,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onLockscreenFlashlightEnabledChange={setLockscreenFlashlightEnabled}
             lockscreenBrightnessEnabled={lockscreenBrightnessEnabled}
             onLockscreenBrightnessEnabledChange={setLockscreenBrightnessEnabled}
+            lockscreenRotationLockEnabled={lockscreenRotationLockEnabled}
+            onLockscreenRotationLockEnabledChange={setLockscreenRotationLockEnabled}
           />
         );
 

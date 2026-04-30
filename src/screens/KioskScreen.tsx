@@ -105,6 +105,8 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
   const [returnTapTimeout, setReturnTapTimeout] = useState<number>(1500);
   const [returnMode, setReturnMode] = useState<string>('tap_anywhere');
   const [returnButtonPosition, setReturnButtonPosition] = useState<string>('bottom-right');
+  const [returnButtonXPercent, setReturnButtonXPercent] = useState<number>(92);
+  const [returnButtonYPercent, setReturnButtonYPercent] = useState<number>(92);
 
   const resetTapSequence = useCallback((reason?: string) => {
     tapCountRef.current = 0;
@@ -1426,11 +1428,15 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       const savedReturnTapTimeout = num(K.RETURN_TAP_TIMEOUT, 1500);
       const savedReturnMode = str(K.RETURN_MODE) ?? 'tap_anywhere';
       const savedReturnButtonPosition = str(K.RETURN_BUTTON_POSITION) ?? 'bottom-right';
+      const savedReturnButtonXPercent = num(K.RETURN_BUTTON_X_PERCENT, 92);
+      const savedReturnButtonYPercent = num(K.RETURN_BUTTON_Y_PERCENT, 92);
       setReturnButtonVisible(savedReturnButtonVisible);
       setReturnTapCount(savedReturnTapCount);
       setReturnTapTimeout(savedReturnTapTimeout);
       setReturnMode(savedReturnMode);
       setReturnButtonPosition(savedReturnButtonPosition);
+      setReturnButtonXPercent(savedReturnButtonXPercent);
+      setReturnButtonYPercent(savedReturnButtonYPercent);
       
       // Load URL Rotation settings
       const savedUrlRotationEnabled = bool(K.URL_ROTATION_ENABLED, false);
@@ -1704,7 +1710,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
             try {
               await OverlayServiceModule.startOverlayService(
                 savedReturnTapCount, savedReturnTapTimeout, savedReturnMode,
-                savedReturnButtonPosition, savedExternalAppPackage,
+                savedReturnButtonPosition, savedReturnButtonXPercent, savedReturnButtonYPercent, savedExternalAppPackage,
                 autoRelaunchApp, allowNotifications
               );
             } catch (e) {
@@ -2203,11 +2209,13 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
           finalTapTimeout, 
           finalReturnMode, 
           finalButtonPosition,
+          returnButtonXPercent,
+          returnButtonYPercent,
           packageName, // Pass locked package for monitoring
           autoRelaunchApp, // Pass auto-relaunch setting
           allowNotifications // Pass NFC enabled flag for monitoring filter
         );
-        console.log(`[KioskScreen] OverlayService started with tapCount=${finalTapCount}, tapTimeout=${finalTapTimeout}, mode=${finalReturnMode}, position=${finalButtonPosition}, package=${packageName}, autoRelaunch=${autoRelaunchApp}, nfcEnabled=${allowNotifications}`);
+        console.log(`[KioskScreen] OverlayService started with tapCount=${finalTapCount}, tapTimeout=${finalTapTimeout}, mode=${finalReturnMode}, position=${finalButtonPosition}, x=${returnButtonXPercent}, y=${returnButtonYPercent}, package=${packageName}, autoRelaunch=${autoRelaunchApp}, nfcEnabled=${allowNotifications}`);
       } catch (overlayError) {
         console.warn('[KioskScreen] Failed to start overlay service:', overlayError);
         // Continue anyway - l'app externe peut toujours être lancée
@@ -2422,6 +2430,8 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
           returnTapTimeout={returnTapTimeout}
           returnButtonVisible={returnButtonVisible}
           returnButtonPosition={returnButtonPosition}
+          returnButtonXPercent={returnButtonXPercent}
+          returnButtonYPercent={returnButtonYPercent}
           showStatusBar={statusBarEnabled && statusBarOnReturn}
           showBattery={showBattery}
           showWifi={showWifi}

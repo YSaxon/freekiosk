@@ -677,6 +677,8 @@ class MainActivity : ReactActivity() {
       val tapTimeout = getAsyncStorageValue("@kiosk_return_tap_timeout", "1500").toIntOrNull() ?: 1500
       val returnMode = getAsyncStorageValue("@kiosk_return_mode", "button")
       val buttonPosition = getAsyncStorageValue("@kiosk_return_button_position", "bottom-right")
+      val buttonXPercent = getAsyncStorageValue("@kiosk_return_button_x_percent", "92").toDoubleOrNull() ?: 92.0
+      val buttonYPercent = getAsyncStorageValue("@kiosk_return_button_y_percent", "92").toDoubleOrNull() ?: 92.0
       val autoRelaunch = getAsyncStorageValue("@kiosk_auto_relaunch_app", "true") == "true"
       val nfcEnabled = getAsyncStorageValue("@kiosk_allow_notifications", "false") == "true"
 
@@ -685,12 +687,14 @@ class MainActivity : ReactActivity() {
       serviceIntent.putExtra("TAP_TIMEOUT", tapTimeout.coerceIn(500, 5000).toLong())
       serviceIntent.putExtra("RETURN_MODE", returnMode)
       serviceIntent.putExtra("BUTTON_POSITION", buttonPosition)
+      serviceIntent.putExtra("BUTTON_X_PERCENT", buttonXPercent.coerceIn(0.0, 100.0))
+      serviceIntent.putExtra("BUTTON_Y_PERCENT", buttonYPercent.coerceIn(0.0, 100.0))
       serviceIntent.putExtra("LOCKED_PACKAGE", lockedPackage)
       serviceIntent.putExtra("AUTO_RELAUNCH", autoRelaunch)
       serviceIntent.putExtra("NFC_ENABLED", nfcEnabled)
 
       startService(serviceIntent)
-      DebugLog.d("MainActivity", "startOverlayServiceFromNative: taps=$tapCount timeout=${tapTimeout}ms mode=$returnMode pos=$buttonPosition pkg=$lockedPackage autoRelaunch=$autoRelaunch")
+      DebugLog.d("MainActivity", "startOverlayServiceFromNative: taps=$tapCount timeout=${tapTimeout}ms mode=$returnMode pos=$buttonPosition x=$buttonXPercent y=$buttonYPercent pkg=$lockedPackage autoRelaunch=$autoRelaunch")
     } catch (e: Exception) {
       DebugLog.errorProduction("MainActivity", "Failed to start OverlayService from native: ${e.message}")
     }

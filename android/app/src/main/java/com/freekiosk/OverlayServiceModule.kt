@@ -20,7 +20,18 @@ class OverlayServiceModule(reactContext: ReactApplicationContext) :
     override fun getName(): String = NAME
 
     @ReactMethod
-    fun startOverlayService(tapCount: Int, tapTimeout: Int, returnMode: String, buttonPosition: String, lockedPackage: String?, autoRelaunch: Boolean, nfcEnabled: Boolean, promise: Promise) {
+    fun startOverlayService(
+        tapCount: Int,
+        tapTimeout: Int,
+        returnMode: String,
+        buttonPosition: String,
+        buttonXPercent: Double,
+        buttonYPercent: Double,
+        lockedPackage: String?,
+        autoRelaunch: Boolean,
+        nfcEnabled: Boolean,
+        promise: Promise
+    ) {
         try {
             // Démarrer le service même sans permission overlay
             // Le service peut toujours fonctionner en arrière-plan (timer test mode, retour auto)
@@ -36,6 +47,8 @@ class OverlayServiceModule(reactContext: ReactApplicationContext) :
             serviceIntent.putExtra("TAP_TIMEOUT", tapTimeout.coerceIn(500, 5000).toLong())
             serviceIntent.putExtra("RETURN_MODE", returnMode)
             serviceIntent.putExtra("BUTTON_POSITION", buttonPosition)
+            serviceIntent.putExtra("BUTTON_X_PERCENT", buttonXPercent.coerceIn(0.0, 100.0))
+            serviceIntent.putExtra("BUTTON_Y_PERCENT", buttonYPercent.coerceIn(0.0, 100.0))
             
             // Add auto-relaunch monitoring parameters
             if (lockedPackage != null && lockedPackage.isNotEmpty()) {
@@ -46,7 +59,10 @@ class OverlayServiceModule(reactContext: ReactApplicationContext) :
             }
             
             reactApplicationContext.startService(serviceIntent)
-            DebugLog.d("OverlayServiceModule", "Started OverlayService with tapCount=$tapCount, tapTimeout=${tapTimeout}ms, mode=$returnMode, position=$buttonPosition")
+            DebugLog.d(
+                "OverlayServiceModule",
+                "Started OverlayService with tapCount=$tapCount, tapTimeout=${tapTimeout}ms, mode=$returnMode, position=$buttonPosition, x=$buttonXPercent, y=$buttonYPercent"
+            )
             promise.resolve(true)
         } catch (e: Exception) {
             DebugLog.errorProduction("OverlayServiceModule", "Error starting OverlayService: ${e.message}")

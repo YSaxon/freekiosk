@@ -3,8 +3,8 @@
  * Lock mode, Auto-launch, External app behavior
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, Linking } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import {
   SettingsSection,
   SettingsSwitch,
@@ -45,8 +45,12 @@ interface SecurityTabProps {
   onReturnTapCountChange: (value: string) => void;
   returnTapTimeout: string;
   onReturnTapTimeoutChange: (value: string) => void;
-  returnButtonPosition: string; // 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  returnButtonPosition: string; // 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'custom'
   onReturnButtonPositionChange: (value: string) => void;
+  returnButtonXPercent: number;
+  onReturnButtonXPercentChange: (value: number) => void;
+  returnButtonYPercent: number;
+  onReturnButtonYPercentChange: (value: number) => void;
   overlayButtonVisible: boolean;
   onOverlayButtonVisibleChange: (value: boolean) => void;
   volumeUp5TapEnabled: boolean;
@@ -88,6 +92,8 @@ interface SecurityTabProps {
   onLockscreenFlashlightEnabledChange: (value: boolean) => void;
   lockscreenBrightnessEnabled: boolean;
   onLockscreenBrightnessEnabledChange: (value: boolean) => void;
+  lockscreenRotationLockEnabled: boolean;
+  onLockscreenRotationLockEnabledChange: (value: boolean) => void;
 }
 
 const SecurityTab: React.FC<SecurityTabProps> = ({
@@ -110,6 +116,10 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onReturnTapTimeoutChange,
   returnButtonPosition,
   onReturnButtonPositionChange,
+  returnButtonXPercent,
+  onReturnButtonXPercentChange,
+  returnButtonYPercent,
+  onReturnButtonYPercentChange,
   overlayButtonVisible,
   onOverlayButtonVisibleChange,
   volumeUp5TapEnabled,
@@ -143,7 +153,63 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onLockscreenFlashlightEnabledChange,
   lockscreenBrightnessEnabled,
   onLockscreenBrightnessEnabledChange,
+  lockscreenRotationLockEnabled,
+  onLockscreenRotationLockEnabledChange,
 }) => {
+  const [previewWidth, setPreviewWidth] = useState(0);
+  const [previewHeight, setPreviewHeight] = useState(0);
+  const [xPercentText, setXPercentText] = useState(String(returnButtonXPercent));
+  const [yPercentText, setYPercentText] = useState(String(returnButtonYPercent));
+  const previewPadding = 10;
+  const previewButtonSize = 44;
+
+  useEffect(() => {
+    setXPercentText(String(returnButtonXPercent));
+  }, [returnButtonXPercent]);
+
+  useEffect(() => {
+    setYPercentText(String(returnButtonYPercent));
+  }, [returnButtonYPercent]);
+
+  const commitPercentInput = (
+    text: string,
+    fallbackValue: number,
+    onChange: (value: number) => void,
+    setText: (value: string) => void,
+  ) => {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+      setText(String(fallbackValue));
+      return;
+    }
+
+    const parsed = parseFloat(trimmed);
+    if (Number.isNaN(parsed)) {
+      setText(String(fallbackValue));
+      return;
+    }
+
+    const clamped = Math.max(0, Math.min(100, parsed));
+    onChange(clamped);
+    setText(String(clamped));
+  };
+
+  const customButtonPosition = useMemo(() => {
+    const availableWidth = Math.max(previewWidth - previewButtonSize, 0);
+    const availableHeight = Math.max(previewHeight - previewButtonSize, 0);
+    const x = (returnButtonXPercent / 100) * availableWidth;
+    const y = (returnButtonYPercent / 100) * availableHeight;
+    return {
+      left: Math.max(previewPadding, Math.min(x, Math.max(previewPadding, availableWidth - previewPadding))),
+      top: Math.max(previewPadding, Math.min(y, Math.max(previewPadding, availableHeight - previewPadding))),
+    };
+  }, [previewHeight, previewWidth, returnButtonXPercent, returnButtonYPercent]);
+
+  const returnButtonPositionLabel =
+    returnButtonPosition === 'custom'
+      ? `custom ${Math.round(returnButtonXPercent)}%, ${Math.round(returnButtonYPercent)}%`
+      : returnButtonPosition;
+
   return (
     <View>
       {/* Lock Mode */}
@@ -309,10 +375,75 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
                     { value: 'top-right', label: 'Top Right', icon: 'arrow-top-right' },
                     { value: 'bottom-left', label: 'Bottom Left', icon: 'arrow-bottom-left' },
                     { value: 'bottom-right', label: 'Bottom Right', icon: 'arrow-bottom-right' },
+                    { value: 'custom', label: 'Custom', icon: 'gesture-tap-button', hint: 'Drag the preview button below' },
                   ]}
                   value={returnButtonPosition}
                   onValueChange={onReturnButtonPositionChange}
                 />
+                {returnButtonPosition === 'custom' && (
+                  <View style={styles.customPositionEditor}>
+                    <Text style={styles.customPositionHint}>
+                      Enter X/Y percentages, then save. Current position: {Math.round(returnButtonXPercent)}%, {Math.round(returnButtonYPercent)}%
+                    </Text>
+                    <SettingsInput
+                      label="Horizontal position (0-100%)"
+                      hint="0 = left edge, 100 = right edge"
+                      value={xPercentText}
+                      onChangeText={(text) => {
+                        const filtered = text.replace(/[^0-9.]/g, '');
+                        setXPercentText(filtered);
+                      }}
+                      onBlur={() =>
+                        commitPercentInput(
+                          xPercentText,
+                          returnButtonXPercent,
+                          onReturnButtonXPercentChange,
+                          setXPercentText,
+                        )
+                      }
+                      keyboardType="numeric"
+                      placeholder="92"
+                    />
+                    <SettingsInput
+                      label="Vertical position (0-100%)"
+                      hint="0 = top edge, 100 = bottom edge"
+                      value={yPercentText}
+                      onChangeText={(text) => {
+                        const filtered = text.replace(/[^0-9.]/g, '');
+                        setYPercentText(filtered);
+                      }}
+                      onBlur={() =>
+                        commitPercentInput(
+                          yPercentText,
+                          returnButtonYPercent,
+                          onReturnButtonYPercentChange,
+                          setYPercentText,
+                        )
+                      }
+                      keyboardType="numeric"
+                      placeholder="92"
+                    />
+                    <View
+                      style={styles.customPositionPreview}
+                      onLayout={(event) => {
+                        setPreviewWidth(event.nativeEvent.layout.width);
+                        setPreviewHeight(event.nativeEvent.layout.height);
+                      }}
+                    >
+                      <View style={styles.customPositionPreviewHeader}>
+                        <Text style={styles.customPositionPreviewTitle}>Screen preview</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.customPositionButton,
+                          { left: customButtonPosition.left, top: customButtonPosition.top },
+                        ]}
+                      >
+                        <Text style={styles.customPositionButtonText}>↩</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
                 <View style={styles.divider} />
               </>
             )}
@@ -342,7 +473,7 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
         <SettingsInfoBox variant="info">
           <Text style={styles.infoText}>
             ℹ️ {returnMode === 'button' && displayMode === 'external_app' 
-              ? `Tap the return button (${returnButtonPosition}) ${returnTapCount || '5'} times to access settings`
+              ? `Tap the return button (${returnButtonPositionLabel}) ${returnTapCount || '5'} times to access settings`
               : `Tap anywhere on screen ${returnTapCount || '5'} times within ${returnTapTimeout ? `${(parseInt(returnTapTimeout, 10) / 1000).toFixed(1)}s` : '1.5s'} to access settings`}
             {kioskEnabled && ' (PIN required)'}
           </Text>
@@ -568,6 +699,13 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
           value={lockscreenBrightnessEnabled}
           onValueChange={onLockscreenBrightnessEnabledChange}
         />
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="🔄 Rotation lock on lock screen"
+          hint="Show a rotation lock toggle on the PIN entry screen."
+          value={lockscreenRotationLockEnabled}
+          onValueChange={onLockscreenRotationLockEnabledChange}
+        />
       </SettingsSection>
 
       {/* Return Mechanism Info - Always visible */}
@@ -575,7 +713,7 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
         <Text style={styles.infoTitle}>ℹ️ Return to Settings</Text>
         <Text style={styles.infoText}>
           {displayMode === 'external_app' && returnMode === 'button'
-            ? `• Tap the return button (${returnButtonPosition}) ${returnTapCount || '5'} times${overlayButtonVisible ? '' : ' (invisible)'}`
+            ? `• Tap the return button (${returnButtonPositionLabel}) ${returnTapCount || '5'} times${overlayButtonVisible ? '' : ' (invisible)'}`
             : `• Tap ${returnTapCount || '5'} times anywhere on the screen within ${returnTapTimeout ? `${(parseInt(returnTapTimeout, 10) / 1000).toFixed(1)}s` : '1.5s'}${overlayButtonVisible ? ' (visual indicator visible)' : ''}`}
           {displayMode === 'external_app' && '\n• Or use the recent apps selector'}
           {(displayMode === 'webview' || displayMode === 'media_player') && volumeUp5TapEnabled && `\n• Or press Volume Up/Down ${returnTapCount || '5'} times rapidly`}
@@ -603,6 +741,47 @@ const styles = StyleSheet.create({
   timerInput: {
     marginTop: Spacing.md,
     paddingLeft: Spacing.xxl,
+  },
+  customPositionEditor: {
+    marginTop: Spacing.md,
+  },
+  customPositionHint: {
+    ...Typography.hint,
+    marginBottom: Spacing.sm,
+  },
+  customPositionPreview: {
+    height: 180,
+    borderRadius: Spacing.inputRadius,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceVariant,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  customPositionPreviewHeader: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  customPositionPreviewTitle: {
+    ...Typography.label,
+    color: Colors.textSecondary,
+  },
+  customPositionButton: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  customPositionButtonText: {
+    color: Colors.textOnPrimary,
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 

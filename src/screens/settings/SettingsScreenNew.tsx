@@ -189,6 +189,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [lockscreenAudioEnabled, setLockscreenAudioEnabled] = useState<boolean>(false);
   const [lockscreenFlashlightEnabled, setLockscreenFlashlightEnabled] = useState<boolean>(false);
   const [lockscreenBrightnessEnabled, setLockscreenBrightnessEnabled] = useState<boolean>(false);
+  const [lockscreenRotationLockEnabled, setLockscreenRotationLockEnabled] = useState<boolean>(false);
 
   // PDF Viewer state
   const [pdfViewerEnabled, setPdfViewerEnabled] = useState<boolean>(false);
@@ -602,12 +603,14 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const savedLockscreenAudio = await StorageService.getLockscreenAudioEnabled();
     const savedLockscreenFlashlight = await StorageService.getLockscreenFlashlightEnabled();
     const savedLockscreenBrightness = await StorageService.getLockscreenBrightnessEnabled();
+    const savedLockscreenRotationLock = await StorageService.getLockscreenRotationLockEnabled();
     setLockscreenWifiEnabled(savedLockscreenWifi);
     setLockscreenBluetoothEnabled(savedLockscreenBt);
     setLockscreenEmergencyCallEnabled(savedLockscreenEmergency);
     setLockscreenAudioEnabled(savedLockscreenAudio);
     setLockscreenFlashlightEnabled(savedLockscreenFlashlight);
     setLockscreenBrightnessEnabled(savedLockscreenBrightness);
+    setLockscreenRotationLockEnabled(savedLockscreenRotationLock);
 
     // PDF Viewer setting
     const savedPdfViewerEnabled = await StorageService.getPdfViewerEnabled();

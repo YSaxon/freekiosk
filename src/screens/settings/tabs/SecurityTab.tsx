@@ -88,6 +88,8 @@ interface SecurityTabProps {
   onLockscreenFlashlightEnabledChange: (value: boolean) => void;
   lockscreenBrightnessEnabled: boolean;
   onLockscreenBrightnessEnabledChange: (value: boolean) => void;
+  lockscreenRotationLockEnabled: boolean;
+  onLockscreenRotationLockEnabledChange: (value: boolean) => void;
 }
 
 const SecurityTab: React.FC<SecurityTabProps> = ({
@@ -143,6 +145,8 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onLockscreenFlashlightEnabledChange,
   lockscreenBrightnessEnabled,
   onLockscreenBrightnessEnabledChange,
+  lockscreenRotationLockEnabled,
+  onLockscreenRotationLockEnabledChange,
 }) => {
   return (
     <View>
@@ -567,6 +571,13 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
           hint="Show a brightness button on the PIN entry screen. Opens a slider."
           value={lockscreenBrightnessEnabled}
           onValueChange={onLockscreenBrightnessEnabledChange}
+        />
+        <View style={styles.divider} />
+        <SettingsSwitch
+          label="🔄 Rotation lock on lock screen"
+          hint="Show a rotation lock toggle on the PIN entry screen."
+          value={lockscreenRotationLockEnabled}
+          onValueChange={onLockscreenRotationLockEnabledChange}
         />
       </SettingsSection>
 

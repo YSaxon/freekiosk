@@ -159,6 +159,12 @@ const KEYS = {
   LOCKSCREEN_FLASHLIGHT_ENABLED: '@kiosk_lockscreen_flashlight_enabled',
   LOCKSCREEN_BRIGHTNESS_ENABLED: '@kiosk_lockscreen_brightness_enabled',
   LOCKSCREEN_ROTATION_LOCK_ENABLED: '@kiosk_lockscreen_rotation_lock_enabled',
+  // School Lock
+  SCHOOL_LOCK_ENABLED: '@kiosk_school_lock_enabled',
+  SCHOOL_LOCK_WIFI_SSID: '@kiosk_school_lock_wifi_ssid',
+  SCHOOL_LOCK_START_TIME: '@kiosk_school_lock_start_time',
+  SCHOOL_LOCK_END_TIME: '@kiosk_school_lock_end_time',
+  SCHOOL_LOCK_DAYS: '@kiosk_school_lock_days',
 };
 
 export const StorageService = {
@@ -384,6 +390,12 @@ export const StorageService = {
         KEYS.DASHBOARD_TILES,
         // Managed Apps
         KEYS.MANAGED_APPS,
+        // School Lock
+        KEYS.SCHOOL_LOCK_ENABLED,
+        KEYS.SCHOOL_LOCK_WIFI_SSID,
+        KEYS.SCHOOL_LOCK_START_TIME,
+        KEYS.SCHOOL_LOCK_END_TIME,
+        KEYS.SCHOOL_LOCK_DAYS,
         // Legacy keys
         KEYS.SCREENSAVER_DELAY,
         KEYS.MOTION_DETECTION_ENABLED,
@@ -2657,6 +2669,98 @@ export const StorageService = {
     } catch (error) {
       console.error('Error getting lockscreen rotation lock enabled:', error);
       return false;
+    }
+  },
+
+  // ============ SCHOOL LOCK ============
+
+  saveSchoolLockEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.SCHOOL_LOCK_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving school lock enabled:', error);
+    }
+  },
+
+  getSchoolLockEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.SCHOOL_LOCK_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting school lock enabled:', error);
+      return false;
+    }
+  },
+
+  saveSchoolLockWifiSsid: async (value: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.SCHOOL_LOCK_WIFI_SSID, value);
+    } catch (error) {
+      console.error('Error saving school lock Wi-Fi SSID:', error);
+    }
+  },
+
+  getSchoolLockWifiSsid: async (): Promise<string> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.SCHOOL_LOCK_WIFI_SSID);
+      return value || '';
+    } catch (error) {
+      console.error('Error getting school lock Wi-Fi SSID:', error);
+      return '';
+    }
+  },
+
+  saveSchoolLockStartTime: async (value: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.SCHOOL_LOCK_START_TIME, value);
+    } catch (error) {
+      console.error('Error saving school lock start time:', error);
+    }
+  },
+
+  getSchoolLockStartTime: async (): Promise<string> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.SCHOOL_LOCK_START_TIME);
+      return value || '08:00';
+    } catch (error) {
+      console.error('Error getting school lock start time:', error);
+      return '08:00';
+    }
+  },
+
+  saveSchoolLockEndTime: async (value: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.SCHOOL_LOCK_END_TIME, value);
+    } catch (error) {
+      console.error('Error saving school lock end time:', error);
+    }
+  },
+
+  getSchoolLockEndTime: async (): Promise<string> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.SCHOOL_LOCK_END_TIME);
+      return value || '15:30';
+    } catch (error) {
+      console.error('Error getting school lock end time:', error);
+      return '15:30';
+    }
+  },
+
+  saveSchoolLockDays: async (days: number[]): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.SCHOOL_LOCK_DAYS, JSON.stringify(days));
+    } catch (error) {
+      console.error('Error saving school lock days:', error);
+    }
+  },
+
+  getSchoolLockDays: async (): Promise<number[]> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.SCHOOL_LOCK_DAYS);
+      return value ? JSON.parse(value) : [1, 2, 3, 4, 5];
+    } catch (error) {
+      console.error('Error getting school lock days:', error);
+      return [1, 2, 3, 4, 5];
     }
   },
 

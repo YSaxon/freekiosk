@@ -153,6 +153,13 @@ const KEYS = {
   // Dashboard
   DASHBOARD_MODE_ENABLED: '@kiosk_dashboard_mode_enabled',
   DASHBOARD_TILES: '@kiosk_dashboard_tiles',
+  // Lock Screen Controls
+  LOCKSCREEN_WIFI_ENABLED: '@kiosk_lockscreen_wifi_enabled',
+  LOCKSCREEN_BLUETOOTH_ENABLED: '@kiosk_lockscreen_bluetooth_enabled',
+  LOCKSCREEN_EMERGENCY_CALL_ENABLED: '@kiosk_lockscreen_emergency_call_enabled',
+  LOCKSCREEN_AUDIO_ENABLED: '@kiosk_lockscreen_audio_enabled',
+  LOCKSCREEN_FLASHLIGHT_ENABLED: '@kiosk_lockscreen_flashlight_enabled',
+  LOCKSCREEN_BRIGHTNESS_ENABLED: '@kiosk_lockscreen_brightness_enabled',
   // HTTP Basic Auth
   HTTP_BASIC_AUTH_USERNAME: '@kiosk_http_basic_auth_username',
 };
@@ -2583,5 +2590,115 @@ export const StorageService = {
 
   /** Expose KEYS for external multiGet consumers */
   KEYS,
+
+  // ============ LOCK SCREEN CONTROLS ============
+
+  saveLockscreenWifiEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_WIFI_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen wifi enabled:', error);
+    }
+  },
+
+  getLockscreenWifiEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_WIFI_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen wifi enabled:', error);
+      return false;
+    }
+  },
+
+  saveLockscreenBluetoothEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_BLUETOOTH_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen bluetooth enabled:', error);
+    }
+  },
+
+  getLockscreenBluetoothEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_BLUETOOTH_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen bluetooth enabled:', error);
+      return false;
+    }
+  },
+
+  saveLockscreenEmergencyCallEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_EMERGENCY_CALL_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen emergency call enabled:', error);
+    }
+  },
+
+  getLockscreenEmergencyCallEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_EMERGENCY_CALL_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen emergency call enabled:', error);
+      return false;
+    }
+  },
+
+  saveLockscreenAudioEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_AUDIO_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen audio enabled:', error);
+    }
+  },
+
+  getLockscreenAudioEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_AUDIO_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen audio enabled:', error);
+      return false;
+    }
+  },
+
+  saveLockscreenFlashlightEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_FLASHLIGHT_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen flashlight enabled:', error);
+    }
+  },
+
+  getLockscreenFlashlightEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_FLASHLIGHT_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen flashlight enabled:', error);
+      return false;
+    }
+  },
+
+  saveLockscreenBrightnessEnabled: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.LOCKSCREEN_BRIGHTNESS_ENABLED, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving lockscreen brightness enabled:', error);
+    }
+  },
+
+  getLockscreenBrightnessEnabled: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.LOCKSCREEN_BRIGHTNESS_ENABLED);
+      return value ? JSON.parse(value) : false;
+    } catch (error) {
+      console.error('Error getting lockscreen brightness enabled:', error);
+      return false;
+    }
+  },
 
 };

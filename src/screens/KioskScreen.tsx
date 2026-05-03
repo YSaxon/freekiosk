@@ -1461,6 +1461,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
       const savedAllowPowerButton = bool(K.ALLOW_POWER_BUTTON, true);
       const savedAllowNotifications = bool(K.ALLOW_NOTIFICATIONS, false);
       const savedAllowSystemInfo = bool(K.ALLOW_SYSTEM_INFO, false);
+      const savedLockscreenEmergencyCall = bool(K.LOCKSCREEN_EMERGENCY_CALL_ENABLED, false);
 
       setDisplayMode(savedDisplayMode);
       setExternalAppPackage(savedExternalAppPackage);
@@ -1719,7 +1720,7 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         try {
           // Pass external app package so it gets added to whitelist
           const packageToWhitelist = savedDisplayMode === 'external_app' && savedExternalAppPackage ? savedExternalAppPackage : undefined;
-          await KioskModule.startLockTask(packageToWhitelist, savedAllowPowerButton, savedAllowNotifications, savedAllowSystemInfo);
+          await KioskModule.startLockTask(packageToWhitelist, savedAllowPowerButton, savedAllowNotifications, savedAllowSystemInfo, savedLockscreenEmergencyCall);
         } catch {
           // Silent fail
         }

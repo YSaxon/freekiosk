@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, NativeModules } from 'react-native';
 import { verifySecurePin, getLockoutStatus, hasSecurePin } from '../utils/secureStorage';
 import { StorageService } from '../utils/storage';
+import WifiDialog from './WifiDialog';
+import BluetoothDialog from './BluetoothDialog';
+import AudioOutputDialog from './AudioOutputDialog';
+import BrightnessDialog from './BrightnessDialog';
+
+const { KioskModule, AudioControlModule, FlashlightModule } = NativeModules;
 
 interface PinInputProps {
   onSuccess: () => void;
@@ -17,21 +23,64 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   const [hasPinConfigured, setHasPinConfigured] = useState<boolean>(false);
   const [pinMode, setPinMode] = useState<'numeric' | 'alphanumeric'>('numeric');
   const inputRef = useRef<TextInput>(null);
+  const [showWifiButton, setShowWifiButton] = useState(false);
+  const [showBluetoothButton, setShowBluetoothButton] = useState(false);
+  const [showAudioControls, setShowAudioControls] = useState(false);
+  const [showEmergencyButton, setShowEmergencyButton] = useState(false);
+  const [showFlashlightButton, setShowFlashlightButton] = useState(false);
+  const [showBrightnessButton, setShowBrightnessButton] = useState(false);
+  const [wifiDialogVisible, setWifiDialogVisible] = useState(false);
+  const [bluetoothDialogVisible, setBluetoothDialogVisible] = useState(false);
+  const [audioDialogVisible, setAudioDialogVisible] = useState(false);
+  const [brightnessDialogVisible, setBrightnessDialogVisible] = useState(false);
+  const [flashlightAvailable, setFlashlightAvailable] = useState(false);
+  const [flashlightOn, setFlashlightOn] = useState(false);
+  const [flashlightBusy, setFlashlightBusy] = useState(false);
 
   useEffect(() => {
     checkLockoutStatus();
     checkPinConfiguration();
     loadPinMode();
+    loadLockscreenSettings();
     const interval = setInterval(checkLockoutStatus, 1000);
     return () => {
       clearInterval(interval);
     };
   }, []);
 
-  // Simple and reliable PIN change handler
-  // Uses native secureTextEntry for masking - no manual bullet management
+  const loadLockscreenSettings = async (): Promise<void> => {
+    const [wifi, bluetooth, audio, emergency, flashlight, brightness] = await Promise.all([
+      StorageService.getLockscreenWifiEnabled(),
+      StorageService.getLockscreenBluetoothEnabled(),
+      StorageService.getLockscreenAudioEnabled(),
+      StorageService.getLockscreenEmergencyCallEnabled(),
+      StorageService.getLockscreenFlashlightEnabled(),
+      StorageService.getLockscreenBrightnessEnabled(),
+    ]);
+
+    setShowWifiButton(wifi);
+    setShowBluetoothButton(bluetooth);
+    setShowAudioControls(audio);
+    setShowEmergencyButton(emergency);
+    setShowFlashlightButton(flashlight);
+    setShowBrightnessButton(brightness);
+
+    if (flashlight && FlashlightModule?.isAvailable) {
+      try {
+        const available = await FlashlightModule.isAvailable();
+        setFlashlightAvailable(Boolean(available));
+        if (available && FlashlightModule?.getState) {
+          const enabled = await FlashlightModule.getState();
+          setFlashlightOn(Boolean(enabled));
+        }
+      } catch (e) {
+        console.warn('[PinInput] flashlight availability error:', e);
+        setFlashlightAvailable(false);
+      }
+    }
+  };
+
   const handlePinChange = (text: string): void => {
-    // For numeric mode, filter out non-numeric characters
     if (pinMode === 'numeric') {
       const filtered = text.replace(/[^0-9]/g, '');
       setPin(filtered);
@@ -107,11 +156,63 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
     }
   };
 
+  const handleEmergencyCall = async (): Promise<void> => {
+    try {
+      await KioskModule.launchEmergencyDial();
+    } catch (e) {
+      console.warn('[PinInput] launchEmergencyDial error:', e);
+      Alert.alert('Emergency Call', 'Unable to open the emergency dialer.');
+    }
+  };
+
+  const handleAudioPress = async (): Promise<void> => {
+    try {
+      if (AudioControlModule?.showSystemOutputSwitcher) {
+        const shown = await AudioControlModule.showSystemOutputSwitcher();
+        if (shown) {
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[PinInput] showSystemOutputSwitcher error:', e);
+    }
+
+    setAudioDialogVisible(true);
+  };
+
+  const handleFlashlightPress = async (): Promise<void> => {
+    if (!FlashlightModule?.setEnabled || flashlightBusy) {
+      return;
+    }
+
+    const next = !flashlightOn;
+    setFlashlightBusy(true);
+    setFlashlightOn(next);
+    try {
+      const result = await FlashlightModule.setEnabled(next);
+      setFlashlightOn(Boolean(result));
+    } catch (e) {
+      console.warn('[PinInput] flashlight toggle error:', e);
+      setFlashlightOn(!next);
+      Alert.alert('Flashlight', 'Unable to change flashlight state.');
+    } finally {
+      setFlashlightBusy(false);
+    }
+  };
+
   const formatTime = (milliseconds: number): string => {
     const minutes = Math.floor(milliseconds / 60000);
     const seconds = Math.floor((milliseconds % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
+
+  const hasQuickControls =
+    showWifiButton ||
+    showBluetoothButton ||
+    showAudioControls ||
+    showEmergencyButton ||
+    (showFlashlightButton && flashlightAvailable) ||
+    showBrightnessButton;
 
   return (
     <View style={styles.container}>
@@ -176,6 +277,61 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
           </TouchableOpacity>
         </>
       )}
+
+      {hasQuickControls && (
+        <View style={styles.quickControls}>
+          {showWifiButton && (
+            <TouchableOpacity style={styles.quickBtn} onPress={() => setWifiDialogVisible(true)}>
+              <Text style={styles.quickBtnIcon}>📶</Text>
+              <Text style={styles.quickBtnLabel}>Wi-Fi</Text>
+            </TouchableOpacity>
+          )}
+
+          {showBluetoothButton && (
+            <TouchableOpacity style={styles.quickBtn} onPress={() => setBluetoothDialogVisible(true)}>
+              <Text style={styles.quickBtnIcon}>🔵</Text>
+              <Text style={styles.quickBtnLabel}>Bluetooth</Text>
+            </TouchableOpacity>
+          )}
+
+          {showAudioControls && (
+            <TouchableOpacity style={styles.quickBtn} onPress={handleAudioPress}>
+              <Text style={styles.quickBtnIcon}>🔊</Text>
+              <Text style={styles.quickBtnLabel}>Audio</Text>
+            </TouchableOpacity>
+          )}
+
+          {showFlashlightButton && flashlightAvailable && (
+            <TouchableOpacity
+              style={[styles.quickBtn, flashlightOn && styles.quickBtnActive]}
+              onPress={handleFlashlightPress}
+              disabled={flashlightBusy}
+            >
+              <Text style={styles.quickBtnIcon}>{flashlightOn ? '💡' : '🔦'}</Text>
+              <Text style={styles.quickBtnLabel}>{flashlightOn ? 'Light Off' : 'Light On'}</Text>
+            </TouchableOpacity>
+          )}
+
+          {showBrightnessButton && (
+            <TouchableOpacity style={styles.quickBtn} onPress={() => setBrightnessDialogVisible(true)}>
+              <Text style={styles.quickBtnIcon}>☀️</Text>
+              <Text style={styles.quickBtnLabel}>Brightness</Text>
+            </TouchableOpacity>
+          )}
+
+          {showEmergencyButton && (
+            <TouchableOpacity style={[styles.quickBtn, styles.emergencyBtn]} onPress={handleEmergencyCall}>
+              <Text style={styles.quickBtnIcon}>🆘</Text>
+              <Text style={[styles.quickBtnLabel, styles.emergencyLabel]}>911</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      <WifiDialog visible={wifiDialogVisible} onClose={() => setWifiDialogVisible(false)} />
+      <BluetoothDialog visible={bluetoothDialogVisible} onClose={() => setBluetoothDialogVisible(false)} />
+      <AudioOutputDialog visible={audioDialogVisible} onClose={() => setAudioDialogVisible(false)} />
+      <BrightnessDialog visible={brightnessDialogVisible} onClose={() => setBrightnessDialogVisible(false)} />
     </View>
   );
 };
@@ -280,6 +436,50 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#dc3545',
     fontFamily: 'monospace',
+  },
+  quickControls: {
+    width: '100%',
+    maxWidth: 320,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    rowGap: 10,
+    marginTop: 28,
+  },
+  quickBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    elevation: 3,
+    width: '31%',
+    minHeight: 72,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  quickBtnActive: {
+    borderColor: '#f0b400',
+    backgroundColor: '#fff7d6',
+  },
+  quickBtnIcon: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  quickBtnLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#444',
+    textAlign: 'center',
+  },
+  emergencyBtn: {
+    borderColor: '#dc3545',
+    borderWidth: 2,
+  },
+  emergencyLabel: {
+    color: '#dc3545',
   },
 });
 

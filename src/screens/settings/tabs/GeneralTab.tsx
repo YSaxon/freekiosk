@@ -149,6 +149,12 @@ interface GeneralTabProps {
   onPickMediaFromDevice: (type: 'video' | 'image' | 'any') => void;
   pickingMedia: boolean;
   
+  // HTTP Basic Auth (webview only)
+  basicAuthUsername: string;
+  onBasicAuthUsernameChange: (value: string) => void;
+  basicAuthPassword: string;
+  onBasicAuthPasswordChange: (value: string) => void;
+
   // Navigation
   onBackToKiosk: () => void;
 }
@@ -244,6 +250,10 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
   onMediaPlayerMuteChange,
   onPickMediaFromDevice,
   pickingMedia,
+  basicAuthUsername,
+  onBasicAuthUsernameChange,
+  basicAuthPassword,
+  onBasicAuthPasswordChange,
   onBackToKiosk,
 }) => {
   return (
@@ -561,6 +571,36 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
         </SettingsSection>
       )}
       
+      {/* HTTP Basic Auth (WebView mode only) */}
+      {displayMode === 'webview' && (
+        <SettingsSection title="Website Authentication" icon="lock-outline">
+          <SettingsInput
+            label="Username"
+            value={basicAuthUsername}
+            onChangeText={onBasicAuthUsernameChange}
+            placeholder="Leave empty to disable"
+            hint="Username for HTTP Basic Auth (401 challenges)"
+            autoCapitalize="none"
+          />
+          {basicAuthUsername.trim().length > 0 && (
+            <SettingsInput
+              label="Password"
+              value={basicAuthPassword}
+              onChangeText={onBasicAuthPasswordChange}
+              placeholder="Password"
+              secureTextEntry={true}
+              hint="Stored in the device Keychain (not in plain text)"
+              autoCapitalize="none"
+            />
+          )}
+          <SettingsInfoBox variant="info">
+            <Text style={styles.infoText}>
+              When a website returns a 401 Unauthorized response, FreeKiosk will automatically reply with these credentials. Leave username empty to disable.
+            </Text>
+          </SettingsInfoBox>
+        </SettingsSection>
+      )}
+
       {/* URL Rotation (WebView mode only) */}
       {displayMode === 'webview' && (
         <SettingsSection title="URL Rotation" icon="sync">

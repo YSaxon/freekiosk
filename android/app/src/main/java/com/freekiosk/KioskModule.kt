@@ -1238,4 +1238,28 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
             emptyList()
         }
     }
+
+    @ReactMethod
+    fun bringToFront(promise: Promise) {
+        try {
+            val am = reactApplicationContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val tasks = am.appTasks
+            for (task in tasks) {
+                if (task.taskInfo?.baseActivity?.packageName == reactApplicationContext.packageName) {
+                    MainActivity.screensaverReturn = true
+                    task.moveToFront()
+                    promise.resolve(true)
+                    return
+                }
+            }
+            // Fallback: reorder existing MainActivity to front without creating new instance
+            MainActivity.screensaverReturn = true
+            val intent = Intent(reactApplicationContext, MainActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            reactApplicationContext.startActivity(intent)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("ERROR", "bringToFront failed: ${e.message}")
+        }
+    }
 }

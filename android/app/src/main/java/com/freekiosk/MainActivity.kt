@@ -42,7 +42,12 @@ class MainActivity : ReactActivity() {
     // Flag partagé pour bloquer le relaunch - accessible depuis OverlayService
     @Volatile
     var blockAutoRelaunch = false
-    
+
+    // Set before bringToFront() when the screensaver activates in External App mode.
+    // Tells onResume() to skip auto-relaunch and stay in the foreground for the screensaver.
+    @Volatile
+    var screensaverReturn = false
+
     // Flag to prevent processing the same ADB config intent twice
     @Volatile
     var lastProcessedAdbIntent: Long = 0
@@ -537,6 +542,15 @@ class MainActivity : ReactActivity() {
       intent?.removeExtra("navigateToPin")
       isVoluntaryReturn = true
       DebugLog.d("MainActivity", "Voluntary return detected (5-tap), will navigate to PIN: $navigateToPin")
+    }
+
+    // Screensaver activated in External App mode: KioskModule.bringToFront() set this flag.
+    // Skip all relaunch logic — FreeKiosk stays in the foreground to show the screensaver.
+    // The screensaver dismiss callback will call launchExternalApp() to return to the app.
+    if (screensaverReturn) {
+      screensaverReturn = false
+      DebugLog.d("MainActivity", "screensaverReturn=true — staying in foreground for screensaver, skipping relaunch")
+      return
     }
 
     // Fix #overlay-restart: OverlayService.returnToFreeKiosk() sets blockAutoRelaunch=true

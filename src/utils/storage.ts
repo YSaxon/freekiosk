@@ -19,6 +19,10 @@ const KEYS = {
   SCREENSAVER_MOTION_SENSITIVITY: '@screensaver_motion_sensitivity',
   SCREENSAVER_MOTION_DELAY: '@screensaver_motion_delay',
   SCREENSAVER_BRIGHTNESS: '@screensaver_brightness',
+  SCREENSAVER_TYPE: '@screensaver_type',
+  SCREENSAVER_URL: '@screensaver_url',
+  SCREENSAVER_VIDEO_ITEMS: '@screensaver_video_items',
+  SCREENSAVER_VIDEO_LOOP: '@screensaver_video_loop',
   DEFAULT_BRIGHTNESS: '@default_brightness',
   DISPLAY_MODE: '@kiosk_display_mode',
   EXTERNAL_APP_PACKAGE: '@kiosk_external_app_package',
@@ -165,6 +169,8 @@ const KEYS = {
   SCHOOL_LOCK_START_TIME: '@kiosk_school_lock_start_time',
   SCHOOL_LOCK_END_TIME: '@kiosk_school_lock_end_time',
   SCHOOL_LOCK_DAYS: '@kiosk_school_lock_days',
+  // HTTP Basic Auth
+  HTTP_BASIC_AUTH_USERNAME: '@kiosk_http_basic_auth_username',
 };
 
 export const StorageService = {
@@ -280,6 +286,10 @@ export const StorageService = {
         KEYS.SCREENSAVER_MOTION_SENSITIVITY,
         KEYS.SCREENSAVER_MOTION_DELAY,
         KEYS.SCREENSAVER_BRIGHTNESS,
+        KEYS.SCREENSAVER_TYPE,
+        KEYS.SCREENSAVER_URL,
+        KEYS.SCREENSAVER_VIDEO_ITEMS,
+        KEYS.SCREENSAVER_VIDEO_LOOP,
         KEYS.DEFAULT_BRIGHTNESS,
         KEYS.DISPLAY_MODE,
         KEYS.EXTERNAL_APP_PACKAGE,
@@ -388,6 +398,8 @@ export const StorageService = {
         // Dashboard
         KEYS.DASHBOARD_MODE_ENABLED,
         KEYS.DASHBOARD_TILES,
+        // HTTP Basic Auth
+        KEYS.HTTP_BASIC_AUTH_USERNAME,
         // Managed Apps
         KEYS.MANAGED_APPS,
         // School Lock
@@ -651,6 +663,78 @@ export const StorageService = {
     } catch (error) {
       console.error('Error getting screensaver brightness:', error);
       return 0;
+    }
+  },
+
+  saveScreensaverType: async (value: 'dim' | 'url' | 'video'): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.SCREENSAVER_TYPE, value);
+    } catch (error) {
+      console.error('Error saving screensaver type:', error);
+    }
+  },
+
+  getScreensaverType: async (): Promise<'dim' | 'url' | 'video'> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.SCREENSAVER_TYPE);
+      return (value === 'url' || value === 'video') ? value : 'dim';
+    } catch (error) {
+      console.error('Error getting screensaver type:', error);
+      return 'dim';
+    }
+  },
+
+  saveScreensaverUrl: async (value: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.SCREENSAVER_URL, value);
+    } catch (error) {
+      console.error('Error saving screensaver URL:', error);
+    }
+  },
+
+  getScreensaverUrl: async (): Promise<string> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.SCREENSAVER_URL);
+      return value ?? '';
+    } catch (error) {
+      console.error('Error getting screensaver URL:', error);
+      return '';
+    }
+  },
+
+  saveScreensaverVideoItems: async (items: unknown[]): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.SCREENSAVER_VIDEO_ITEMS, JSON.stringify(items));
+    } catch (error) {
+      console.error('Error saving screensaver video items:', error);
+    }
+  },
+
+  getScreensaverVideoItems: async <T = unknown>(): Promise<T[]> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.SCREENSAVER_VIDEO_ITEMS);
+      return value === null ? [] : JSON.parse(value);
+    } catch (error) {
+      console.error('Error getting screensaver video items:', error);
+      return [];
+    }
+  },
+
+  saveScreensaverVideoLoop: async (value: boolean): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.SCREENSAVER_VIDEO_LOOP, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving screensaver video loop:', error);
+    }
+  },
+
+  getScreensaverVideoLoop: async (): Promise<boolean> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.SCREENSAVER_VIDEO_LOOP);
+      return value === null ? true : JSON.parse(value);
+    } catch (error) {
+      console.error('Error getting screensaver video loop:', error);
+      return true;
     }
   },
 
@@ -2523,6 +2607,24 @@ export const StorageService = {
     } catch (error) {
       console.error('Error getting dashboard tiles:', error);
       return [];
+    }
+  },
+
+  saveHttpBasicAuthUsername: async (username: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.HTTP_BASIC_AUTH_USERNAME, username);
+    } catch (error) {
+      console.error('Error saving HTTP basic auth username:', error);
+    }
+  },
+
+  getHttpBasicAuthUsername: async (): Promise<string> => {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.HTTP_BASIC_AUTH_USERNAME);
+      return value ?? '';
+    } catch (error) {
+      console.error('Error getting HTTP basic auth username:', error);
+      return '';
     }
   },
 

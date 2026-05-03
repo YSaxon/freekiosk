@@ -497,6 +497,21 @@ Navigate to a new URL.
 { "url": "https://example.com" }
 ```
 
+#### `POST /api/mode`
+Switch display mode at runtime. Switches between WebView and External App mode without restarting.
+
+**Switch to WebView mode:**
+```json
+{ "mode": "webview", "url": "https://example.com" }
+```
+`url` is optional — omit to keep the current URL.
+
+**Switch to External App mode:**
+```json
+{ "mode": "external_app", "package": "com.example.app" }
+```
+The app must be installed on the device. The overlay service (return button) is started automatically.
+
 #### `GET|POST /api/wake`
 Wake from screensaver.
 

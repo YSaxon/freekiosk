@@ -34,6 +34,7 @@ export interface ApiCallbacks {
   onAutoBrightnessEnable?: (min: number, max: number, offset?: number) => void;
   onAutoBrightnessDisable?: () => void;
   onSetMotionAlwaysOn?: (value: boolean) => void;
+  onSetMode?: (mode: 'webview' | 'external_app', target?: string) => void;
 }
 
 export interface AppStatus {
@@ -315,6 +316,13 @@ class ApiServiceClass {
         case 'setMotionAlwaysOn':
           if (this.callbacks.onSetMotionAlwaysOn) {
             this.callbacks.onSetMotionAlwaysOn(params.value === true);
+          }
+          break;
+
+        case 'setMode':
+          if (this.callbacks.onSetMode && (params.mode === 'webview' || params.mode === 'external_app')) {
+            const target = params.url || params.package || undefined;
+            this.callbacks.onSetMode(params.mode, target);
           }
           break;
 

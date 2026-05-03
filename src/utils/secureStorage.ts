@@ -10,6 +10,7 @@ const PIN_SERVICE = 'freekiosk_pin';
 const API_KEY_SERVICE = 'freekiosk_api_key';
 const MQTT_PASSWORD_SERVICE = 'freekiosk_mqtt_password';
 const WIFI_PASSWORD_SERVICE_PREFIX = 'freekiosk_wifi_password:';
+const BASIC_AUTH_PASSWORD_SERVICE = 'freekiosk_basic_auth_password';
 const LEGACY_API_KEY = '@kiosk_rest_api_key'; // Legacy AsyncStorage key for migration
 const ATTEMPTS_KEY = '@kiosk_pin_attempts';
 const LOCKOUT_KEY = '@kiosk_pin_lockout';
@@ -725,5 +726,44 @@ export async function clearSecureMqttPassword(): Promise<void> {
     console.log('[SecureStorage] MQTT password cleared');
   } catch (error) {
     console.error('[SecureStorage] Error clearing MQTT password:', error);
+  }
+}
+
+// ============================================
+// HTTP Basic Auth Password
+// ============================================
+
+export async function saveSecureBasicAuthPassword(password: string): Promise<boolean> {
+  try {
+    if (!password || password.trim() === '') {
+      await clearSecureBasicAuthPassword();
+      return true;
+    }
+    await Keychain.setGenericPassword('basic_auth_password', password, {
+      service: BASIC_AUTH_PASSWORD_SERVICE,
+      accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
+    });
+    return true;
+  } catch (error) {
+    console.error('[SecureStorage] Error saving basic auth password:', error);
+    return false;
+  }
+}
+
+export async function getSecureBasicAuthPassword(): Promise<string> {
+  try {
+    const credentials = await Keychain.getGenericPassword({ service: BASIC_AUTH_PASSWORD_SERVICE });
+    return credentials ? credentials.password : '';
+  } catch (error) {
+    console.error('[SecureStorage] Error getting basic auth password:', error);
+    return '';
+  }
+}
+
+export async function clearSecureBasicAuthPassword(): Promise<void> {
+  try {
+    await Keychain.resetGenericPassword({ service: BASIC_AUTH_PASSWORD_SERVICE });
+  } catch (error) {
+    console.error('[SecureStorage] Error clearing basic auth password:', error);
   }
 }

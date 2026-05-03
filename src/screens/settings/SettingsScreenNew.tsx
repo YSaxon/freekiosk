@@ -20,7 +20,7 @@ import {
 import CookieManager from '@react-native-cookies/cookies';
 import { Camera } from 'react-native-vision-camera';
 import { StorageService } from '../../utils/storage';
-import { saveSecurePin, hasSecurePin, clearSecurePin } from '../../utils/secureStorage';
+import { saveSecurePin, hasSecurePin, clearSecurePin, saveSecureBasicAuthPassword, getSecureBasicAuthPassword } from '../../utils/secureStorage';
 import CertificateModuleTyped, { CertificateInfo } from '../../utils/CertificateModule';
 import AppLauncherModule, { AppInfo } from '../../utils/AppLauncherModule';
 import OverlayPermissionModule from '../../utils/OverlayPermissionModule';
@@ -88,9 +88,15 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [screensaverEnabled, setScreensaverEnabled] = useState<boolean>(false);
   const [inactivityDelay, setInactivityDelay] = useState<string>('10');
   const [motionEnabled, setMotionEnabled] = useState<boolean>(false);
+  const [motionSensitivity, setMotionSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
   const [motionCameraPosition, setMotionCameraPosition] = useState<'front' | 'back'>('front');
   const [availableCameras, setAvailableCameras] = useState<Array<{position: 'front' | 'back', id: string}>>([]);
   const [screensaverBrightness, setScreensaverBrightness] = useState<number>(0);
+  const [screensaverType, setScreensaverType] = useState<'dim' | 'url' | 'video'>('dim');
+  const [screensaverUrl, setScreensaverUrl] = useState<string>('');
+  const [screensaverVideoItems, setScreensaverVideoItems] = useState<MediaItem[]>([]);
+  const [screensaverVideoLoop, setScreensaverVideoLoop] = useState<boolean>(true);
+  const [pickingScreensaverMedia, setPickingScreensaverMedia] = useState<boolean>(false);
   const [defaultBrightness, setDefaultBrightness] = useState<number>(0.5);
   const [certificates, setCertificates] = useState<CertificateInfo[]>([]);
 
@@ -211,6 +217,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
 
   // Custom User Agent
   const [customUserAgent, setCustomUserAgent] = useState<string>('');
+  const [basicAuthUsername, setBasicAuthUsername] = useState<string>('');
+  const [basicAuthPassword, setBasicAuthPassword] = useState<string>('');
   
   // Media Player states
   const [mediaPlayerItems, setMediaPlayerItems] = useState<MediaItem[]>([]);
@@ -427,8 +435,13 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const savedDefaultBrightness = await StorageService.getDefaultBrightness();
     const savedInactivityDelay = await StorageService.getScreensaverInactivityDelay();
     const savedMotionEnabled = await StorageService.getScreensaverMotionEnabled();
+    const savedMotionSensitivity = await StorageService.getScreensaverMotionSensitivity();
     const savedMotionCameraPosition = await StorageService.getMotionCameraPosition();
     const savedScreensaverBrightness = await StorageService.getScreensaverBrightness();
+    const savedScreensaverType = await StorageService.getScreensaverType();
+    const savedScreensaverUrl = await StorageService.getScreensaverUrl();
+    const savedScreensaverVideoItems = await StorageService.getScreensaverVideoItems<MediaItem>();
+    const savedScreensaverVideoLoop = await StorageService.getScreensaverVideoLoop();
     const hasPinConfigured = await hasSecurePin();
     
     setIsPinConfigured(hasPinConfigured);
@@ -450,8 +463,13 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     setScreensaverEnabled(savedScreensaverEnabled ?? false);
     setDefaultBrightness(savedDefaultBrightness ?? 0.5);
     setMotionEnabled(savedMotionEnabled ?? false);
+    setMotionSensitivity((savedMotionSensitivity as 'low' | 'medium' | 'high') ?? 'medium');
     setMotionCameraPosition(savedMotionCameraPosition ?? 'front');
     setScreensaverBrightness(savedScreensaverBrightness ?? 0);
+    setScreensaverType(savedScreensaverType);
+    setScreensaverUrl(savedScreensaverUrl);
+    setScreensaverVideoItems(savedScreensaverVideoItems);
+    setScreensaverVideoLoop(savedScreensaverVideoLoop);
 
     // Detect available cameras (first attempt — may return [] on slow SoCs before
     // ProcessCameraProvider resolves; the CameraDevicesChanged listener handles the retry)
@@ -654,6 +672,11 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const savedCustomUserAgent = await StorageService.getCustomUserAgent();
     setCustomUserAgent(savedCustomUserAgent);
 
+    const savedBasicAuthUsername = await StorageService.getHttpBasicAuthUsername();
+    const savedBasicAuthPassword = await getSecureBasicAuthPassword();
+    setBasicAuthUsername(savedBasicAuthUsername);
+    setBasicAuthPassword(savedBasicAuthPassword);
+
     // Media Player settings
     const savedMediaItems = await StorageService.getMediaPlayerItems();
     const savedMediaAutoPlay = await StorageService.getMediaPlayerAutoPlay();
@@ -750,6 +773,32 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
       }
     } finally {
       setPickingMedia(false);
+    }
+  };
+
+  const handlePickScreensaverMediaFromDevice = async (type: 'video' | 'image' | 'any') => {
+    try {
+      setPickingScreensaverMedia(true);
+      const result = await FilePickerModule.pickMultipleMedia(type);
+      const files = Array.isArray(result) ? result : [result];
+      if (files.length === 0) return;
+
+      const newItems: MediaItem[] = files.map((file: any) => ({
+        id: generateMediaItemId(),
+        url: file.path,
+        type: (file.type === 'video' ? 'video' : 'image') as 'video' | 'image',
+        title: file.name,
+        isLocal: true,
+        fileName: file.name,
+      }));
+
+      setScreensaverVideoItems(prev => [...prev, ...newItems]);
+    } catch (error: any) {
+      if (error?.code !== 'PICKER_CANCELLED') {
+        Alert.alert('Error', `Failed to pick media: ${error?.message || error}`);
+      }
+    } finally {
+      setPickingScreensaverMedia(false);
     }
   };
 
@@ -1209,15 +1258,22 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveScreenSchedulerRules(screenSchedulerRules);
     await StorageService.saveScreenSchedulerWakeOnTouch(screenSchedulerWakeOnTouch);
 
+    // Screensaver settings apply to all display modes (external_app now supports screensaver)
+    await StorageService.saveScreensaverEnabled(screensaverEnabled);
+    await StorageService.saveScreensaverInactivityEnabled(true);
+    await StorageService.saveScreensaverInactivityDelay(inactivityDelayNumber * 60000);
+    await StorageService.saveScreensaverMotionEnabled(motionEnabled);
+    await StorageService.saveScreensaverMotionSensitivity(motionSensitivity);
+    await StorageService.saveScreensaverBrightness(screensaverBrightness);
+    await StorageService.saveScreensaverType(screensaverType);
+    await StorageService.saveScreensaverUrl(screensaverUrl);
+    await StorageService.saveScreensaverVideoItems(screensaverVideoItems);
+    await StorageService.saveScreensaverVideoLoop(screensaverVideoLoop);
+
     if (displayMode === 'webview' || displayMode === 'media_player') {
       await StorageService.saveAutoReload(displayMode === 'webview' ? autoReload : false);
       await StorageService.saveKioskEnabled(kioskEnabled);
-      await StorageService.saveScreensaverEnabled(screensaverEnabled);
       await StorageService.saveDefaultBrightness(defaultBrightness);
-      await StorageService.saveScreensaverInactivityEnabled(true);
-      await StorageService.saveScreensaverInactivityDelay(inactivityDelayNumber * 60000);
-      await StorageService.saveScreensaverMotionEnabled(motionEnabled);
-      await StorageService.saveScreensaverBrightness(screensaverBrightness);
       
       // Auto-brightness settings
       await StorageService.saveAutoBrightnessEnabled(autoBrightnessEnabled);
@@ -1268,6 +1324,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveWebViewZoomLevel(zoomLevel);
     await StorageService.saveDisableUserZoom(disableUserZoom);
     await StorageService.saveCustomUserAgent(customUserAgent);
+    await StorageService.saveHttpBasicAuthUsername(basicAuthUsername);
+    await saveSecureBasicAuthPassword(basicAuthPassword);
     await StorageService.saveAllowPowerButton(allowPowerButton);
     await StorageService.saveAllowNotifications(allowNotifications);
     await StorageService.saveAllowSystemInfo(allowSystemInfo);
@@ -1752,6 +1810,10 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onMediaPlayerMuteChange={setMediaPlayerMute}
             onPickMediaFromDevice={handlePickMediaFromDevice}
             pickingMedia={pickingMedia}
+            basicAuthUsername={basicAuthUsername}
+            onBasicAuthUsernameChange={setBasicAuthUsername}
+            basicAuthPassword={basicAuthPassword}
+            onBasicAuthPasswordChange={setBasicAuthPassword}
             onBackToKiosk={() => { revokeSettingsAccess(); navigation.reset({ index: 0, routes: [{ name: 'Kiosk' }] }); }}
           />
         );
@@ -1809,10 +1871,22 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onScreensaverEnabledChange={setScreensaverEnabled}
             screensaverBrightness={screensaverBrightness}
             onScreensaverBrightnessChange={setScreensaverBrightness}
+            screensaverType={screensaverType}
+            onScreensaverTypeChange={setScreensaverType}
+            screensaverUrl={screensaverUrl}
+            onScreensaverUrlChange={setScreensaverUrl}
+            screensaverVideoItems={screensaverVideoItems}
+            onScreensaverVideoItemsChange={setScreensaverVideoItems}
+            screensaverVideoLoop={screensaverVideoLoop}
+            onScreensaverVideoLoopChange={setScreensaverVideoLoop}
+            onPickScreensaverMedia={handlePickScreensaverMediaFromDevice}
+            pickingScreensaverMedia={pickingScreensaverMedia}
             inactivityDelay={inactivityDelay}
             onInactivityDelayChange={setInactivityDelay}
             motionEnabled={motionEnabled}
             onMotionEnabledChange={toggleMotionDetection}
+            motionSensitivity={motionSensitivity}
+            onMotionSensitivityChange={setMotionSensitivity}
             motionCameraPosition={motionCameraPosition}
             onMotionCameraPositionChange={handleMotionCameraPositionChange}
             availableCameras={availableCameras}

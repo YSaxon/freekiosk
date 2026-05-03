@@ -107,6 +107,7 @@ class OverlayService : Service() {
                 }
             }
         }
+
     }
 
     private var windowManager: WindowManager? = null
@@ -1011,8 +1012,11 @@ class OverlayService : Service() {
     }
 
     private fun handleTap() {
+        // Notify FreeKiosk of user activity so the inactivity timer resets in External App mode
+        try { KioskModule.sendEventFromNative("screensaverActivity", null) } catch (e: Exception) {}
+
         val now = System.currentTimeMillis()
-        
+
         // First tap - record time and start timeout
         if (tapCount == 0) {
             firstTapTime = now
@@ -1522,7 +1526,7 @@ class OverlayService : Service() {
             DebugLog.d("OverlayService", "destroyOverlay() - statusBarView=${statusBarView != null}, overlayView=${overlayView != null}, indicatorView=${indicatorView != null}")
             
             // Supprimer la status bar
-            statusBarView?.let { 
+            statusBarView?.let {
                 try {
                     windowManager?.removeView(it)
                     DebugLog.d("OverlayService", "Status bar removed")

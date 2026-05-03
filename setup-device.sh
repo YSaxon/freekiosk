@@ -7,7 +7,7 @@
 #   ./setup-device.sh [OPTIONS]
 #
 # Options:
-#   --apk FILE        FreeKiosk APK to install (skipped if omitted)
+#   --apk FILE        FreeKiosk APK/XAPK to install (skipped if omitted)
 #   --config FILE     FreeKiosk backup JSON to push to the device for import
 #   --adb PATH        Path to adb binary (default: adb from $PATH)
 #   --package PKG     FreeKiosk package name (default: com.freekiosk)
@@ -18,7 +18,7 @@
 # What the script does (in order):
 #   1. Verify adb is reachable and wait for exactly one device
 #   2. Print device model / Android version
-#   3. [--apk] Install the APK — handling signature mismatches and existing
+#   3. [--apk] Install the APK/XAPK — handling signature mismatches and existing
 #      device-owner status along the way
 #   4. Grant runtime permissions FreeKiosk needs (usage-stats, overlay,
 #      WRITE_SECURE_SETTINGS, accessibility service)
@@ -144,6 +144,142 @@ user_count() {
   echo "${count:-1}"
 }
 
+device_density_bucket() {
+  local density
+  density=$(adb_shell "wm density" | grep -oE '[0-9]+' | tail -1)
+  density="${density:-320}"
+  if [[ "$density" -le 160 ]]; then
+    echo "mdpi"
+  elif [[ "$density" -le 240 ]]; then
+    echo "hdpi"
+  elif [[ "$density" -le 320 ]]; then
+    echo "xhdpi"
+  elif [[ "$density" -le 480 ]]; then
+    echo "xxhdpi"
+  else
+    echo "xxxhdpi"
+  fi
+}
+
+apk_artifact_package_name() {
+  local artifact="$1"
+  local package_name=""
+
+  if [[ "${artifact,,}" == *.xapk ]]; then
+    package_name=$(unzip -p "$artifact" manifest.json 2>/dev/null \
+      | sed -n 's/.*"package_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+      | head -1)
+  fi
+
+  echo "$package_name"
+}
+
+select_xapk_splits() {
+  local xapk_path="$1" extract_dir="$2"
+  local abi_list density_bucket
+  abi_list=$(adb_shell "getprop ro.product.cpu.abilist")
+  density_bucket=$(device_density_bucket)
+
+  info "Device ABIs: ${abi_list:-unknown}; density bucket: $density_bucket" >&2
+
+  local -a selected=()
+  local -a base_apks=()
+  local -a abi_splits=()
+  local -a density_splits=()
+  local apk basename split_name abi
+
+  while IFS= read -r apk; do
+    basename="${apk##*/}"
+    if [[ "$basename" == config.*.apk ]]; then
+      split_name="${basename%.apk}"
+      split_name="${split_name#config.}"
+      case "$split_name" in
+        armeabi_v7a|arm64_v8a|x86|x86_64)
+          abi_splits+=("$apk")
+          ;;
+        mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi|tvdpi)
+          density_splits+=("$apk")
+          ;;
+        *)
+          # Include non-ABI/non-density splits such as required feature splits.
+          selected+=("$apk")
+          ;;
+      esac
+    else
+      base_apks+=("$apk")
+    fi
+  done < <(find "$extract_dir" -type f -name '*.apk' | sort)
+
+  [[ "${#base_apks[@]}" -gt 0 ]] || die "No APK files found inside XAPK: $xapk_path"
+  selected=("${base_apks[@]}" "${selected[@]}")
+
+  for abi in ${abi_list//,/ }; do
+    abi="${abi//-/_}"
+    for apk in "${abi_splits[@]}"; do
+      basename="${apk##*/}"
+      if [[ "$basename" == "config.$abi.apk" ]]; then
+        selected+=("$apk")
+        abi_splits=()
+        break 2
+      fi
+    done
+  done
+
+  if [[ "${#abi_splits[@]}" -gt 0 ]]; then
+    die "XAPK contains ABI splits but none match this device ($abi_list)."
+  fi
+
+  for apk in "${density_splits[@]}"; do
+    basename="${apk##*/}"
+    if [[ "$basename" == "config.$density_bucket.apk" ]]; then
+      selected+=("$apk")
+      density_splits=()
+      break
+    fi
+  done
+
+  if [[ "${#density_splits[@]}" -gt 0 ]]; then
+    warn "No exact density split for $density_bucket; installing without density split." >&2
+  fi
+
+  printf '%s\n' "${selected[@]}"
+}
+
+install_artifact() {
+  local artifact="$1"
+  local install_out
+
+  if [[ "${artifact,,}" == *.xapk ]]; then
+    command -v unzip &>/dev/null || die "Installing XAPK files requires 'unzip' in PATH."
+
+    local extract_dir
+    extract_dir="$(mktemp -d "${TMPDIR:-/tmp}/freekiosk-xapk.XXXXXX")" || die "Could not create temporary XAPK directory."
+    unzip -q "$artifact" -d "$extract_dir" || {
+      rm -rf "$extract_dir"
+      die "Could not extract XAPK: $artifact"
+    }
+
+    local -a splits=()
+    local selected_output
+    selected_output=$(select_xapk_splits "$artifact" "$extract_dir") || {
+      rm -rf "$extract_dir"
+      return 1
+    }
+    while IFS= read -r split; do
+      splits+=("$split")
+    done <<<"$selected_output"
+
+    info "Installing XAPK with ${#splits[@]} APK file(s)." >&2
+    printf '  %s\n' "${splits[@]##*/}" >&2
+    install_out=$("$ADB" install-multiple -r "${splits[@]}" 2>&1)
+    rm -rf "$extract_dir"
+  else
+    install_out=$("$ADB" install -r "$artifact" 2>&1)
+  fi
+
+  printf '%s\n' "$install_out"
+}
+
 secondary_user_ids() {
   adb_shell "pm list users" \
     | sed -n 's/.*UserInfo{\([0-9][0-9]*\):.*/\1/p' \
@@ -261,6 +397,11 @@ if [[ -n "$APK_PATH" ]]; then
   [[ -f "$APK_PATH" ]] || die "APK not found: $APK_PATH"
   info "APK: $APK_PATH"
 
+  artifact_package=$(apk_artifact_package_name "$APK_PATH")
+  if [[ -n "$artifact_package" && "$artifact_package" != "$PACKAGE" ]]; then
+    die "XAPK package_name is '$artifact_package' but --package is '$PACKAGE'. Pass --package '$artifact_package' or choose the correct artifact."
+  fi
+
   # Play Protect can race or block local installs on some managed/OEM builds.
   # Disable only for this run and restore it in the EXIT trap.
   if [[ "${sdk:-0}" -ge 23 ]]; then
@@ -272,7 +413,7 @@ if [[ -n "$APK_PATH" ]]; then
 
     # Try a straightforward upgrade first
     info "Attempting upgrade install..."
-    install_out=$("$ADB" install -r "$APK_PATH" 2>&1)
+    install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
     if echo "$install_out" | grep -q "Success"; then
       ok "Upgraded successfully."
     else
@@ -320,14 +461,14 @@ if [[ -n "$APK_PATH" ]]; then
           # differently-signed APK will still fail. If that happens, fall back.
         fi
 
-        info "Installing APK..."
-        install_out=$("$ADB" install "$APK_PATH" 2>&1)
+        info "Installing artifact..."
+        install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
         if echo "$install_out" | grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE"; then
           # The -k path kept the sig record — do a full cleanup and retry
           warn "Signature record still cached after -k uninstall. Doing full uninstall..."
           if ask_destructive "All remaining FreeKiosk data will be erased. Continue?"; then
             "$ADB" shell pm uninstall "$PACKAGE" || true
-            install_out=$("$ADB" install "$APK_PATH" 2>&1)
+            install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
           else
             die "Aborting at user request."
           fi
@@ -346,7 +487,7 @@ if [[ -n "$APK_PATH" ]]; then
 
   else
     info "FreeKiosk not currently installed — fresh install..."
-    install_out=$("$ADB" install "$APK_PATH" 2>&1)
+    install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
     if echo "$install_out" | grep -q "Success"; then
       ok "Installed successfully."
     else

@@ -186,6 +186,13 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [urlFilterList, setUrlFilterList] = useState<string[]>([]);
   const [urlFilterShowFeedback, setUrlFilterShowFeedback] = useState<boolean>(false);
 
+  // School Lock states
+  const [schoolLockEnabled, setSchoolLockEnabled] = useState<boolean>(false);
+  const [schoolLockWifiSsid, setSchoolLockWifiSsid] = useState<string>('');
+  const [schoolLockStartTime, setSchoolLockStartTime] = useState<string>('08:00');
+  const [schoolLockEndTime, setSchoolLockEndTime] = useState<string>('15:30');
+  const [schoolLockDays, setSchoolLockDays] = useState<number[]>([1, 2, 3, 4, 5]);
+
   // Lock Screen Controls states
   const [lockscreenWifiEnabled, setLockscreenWifiEnabled] = useState<boolean>(false);
   const [lockscreenBluetoothEnabled, setLockscreenBluetoothEnabled] = useState<boolean>(false);
@@ -606,6 +613,18 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     setUrlFilterMode(savedUrlFilterMode);
     setUrlFilterList(savedUrlFilterList);
     setUrlFilterShowFeedback(savedUrlFilterShowFeedback);
+
+    // School Lock settings
+    const savedSchoolLockEnabled = await StorageService.getSchoolLockEnabled();
+    const savedSchoolLockWifiSsid = await StorageService.getSchoolLockWifiSsid();
+    const savedSchoolLockStartTime = await StorageService.getSchoolLockStartTime();
+    const savedSchoolLockEndTime = await StorageService.getSchoolLockEndTime();
+    const savedSchoolLockDays = await StorageService.getSchoolLockDays();
+    setSchoolLockEnabled(savedSchoolLockEnabled);
+    setSchoolLockWifiSsid(savedSchoolLockWifiSsid);
+    setSchoolLockStartTime(savedSchoolLockStartTime);
+    setSchoolLockEndTime(savedSchoolLockEndTime);
+    setSchoolLockDays(savedSchoolLockDays);
 
     // Lock Screen Controls settings
     const savedLockscreenWifi = await StorageService.getLockscreenWifiEnabled();
@@ -1190,6 +1209,21 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     }
     setPinMaxAttempts(pinMaxAttemptsNumber);
 
+    if (schoolLockEnabled) {
+      if (!schoolLockWifiSsid.trim()) {
+        Alert.alert('Error', 'School Lock requires a Wi-Fi SSID.');
+        return;
+      }
+      if (schoolLockDays.length === 0) {
+        Alert.alert('Error', 'School Lock requires at least one active day.');
+        return;
+      }
+      if (schoolLockStartTime === schoolLockEndTime) {
+        Alert.alert('Error', 'School Lock start and end times must be different.');
+        return;
+      }
+    }
+
     // Save all settings
     if (displayMode === 'webview') {
       await StorageService.saveUrl(finalUrl);
@@ -1325,6 +1359,13 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveUrlFilterMode(urlFilterMode);
     await StorageService.saveUrlFilterList(urlFilterList);
     await StorageService.saveUrlFilterShowFeedback(urlFilterShowFeedback);
+
+    // Save School Lock settings
+    await StorageService.saveSchoolLockEnabled(schoolLockEnabled);
+    await StorageService.saveSchoolLockWifiSsid(schoolLockWifiSsid.trim());
+    await StorageService.saveSchoolLockStartTime(schoolLockStartTime);
+    await StorageService.saveSchoolLockEndTime(schoolLockEndTime);
+    await StorageService.saveSchoolLockDays(schoolLockDays);
 
     // Save Lock Screen Controls settings
     await StorageService.saveLockscreenWifiEnabled(lockscreenWifiEnabled);
@@ -1903,6 +1944,16 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onUrlFilterListChange={setUrlFilterList}
             urlFilterShowFeedback={urlFilterShowFeedback}
             onUrlFilterShowFeedbackChange={setUrlFilterShowFeedback}
+            schoolLockEnabled={schoolLockEnabled}
+            onSchoolLockEnabledChange={setSchoolLockEnabled}
+            schoolLockWifiSsid={schoolLockWifiSsid}
+            onSchoolLockWifiSsidChange={setSchoolLockWifiSsid}
+            schoolLockStartTime={schoolLockStartTime}
+            onSchoolLockStartTimeChange={setSchoolLockStartTime}
+            schoolLockEndTime={schoolLockEndTime}
+            onSchoolLockEndTimeChange={setSchoolLockEndTime}
+            schoolLockDays={schoolLockDays}
+            onSchoolLockDaysChange={setSchoolLockDays}
             lockscreenWifiEnabled={lockscreenWifiEnabled}
             onLockscreenWifiEnabledChange={setLockscreenWifiEnabled}
             lockscreenBluetoothEnabled={lockscreenBluetoothEnabled}

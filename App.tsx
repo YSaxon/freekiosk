@@ -1,12 +1,15 @@
 import React from 'react';
 import { StatusBar } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
+import AppLockGate from './src/components/AppLockGate';
 
 const App: React.FC = () => {
   return (
     <>
       <StatusBar hidden={true} />
-      <AppNavigator />
+      <AppLockGate>
+        <AppNavigator />
+      </AppLockGate>
     </>
   );
 };

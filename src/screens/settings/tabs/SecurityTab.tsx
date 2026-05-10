@@ -13,6 +13,8 @@ import {
   SettingsInfoBox,
   SettingsButton,
   SettingsModeSelector,
+  DaySelector,
+  TimeInput,
   UrlListEditor,
 } from '../../../components/settings';
 import { Colors, Spacing, Typography } from '../../../theme';
@@ -75,6 +77,18 @@ interface SecurityTabProps {
   urlFilterShowFeedback: boolean;
   onUrlFilterShowFeedbackChange: (value: boolean) => void;
 
+  // School Lock
+  schoolLockEnabled: boolean;
+  onSchoolLockEnabledChange: (value: boolean) => void;
+  schoolLockWifiSsid: string;
+  onSchoolLockWifiSsidChange: (value: string) => void;
+  schoolLockStartTime: string;
+  onSchoolLockStartTimeChange: (value: string) => void;
+  schoolLockEndTime: string;
+  onSchoolLockEndTimeChange: (value: string) => void;
+  schoolLockDays: number[];
+  onSchoolLockDaysChange: (days: number[]) => void;
+
   // Lock Screen Controls
   lockscreenWifiEnabled: boolean;
   onLockscreenWifiEnabledChange: (value: boolean) => void;
@@ -131,6 +145,16 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onUrlFilterListChange,
   urlFilterShowFeedback,
   onUrlFilterShowFeedbackChange,
+  schoolLockEnabled,
+  onSchoolLockEnabledChange,
+  schoolLockWifiSsid,
+  onSchoolLockWifiSsidChange,
+  schoolLockStartTime,
+  onSchoolLockStartTimeChange,
+  schoolLockEndTime,
+  onSchoolLockEndTimeChange,
+  schoolLockDays,
+  onSchoolLockDaysChange,
   lockscreenWifiEnabled,
   onLockscreenWifiEnabledChange,
   lockscreenBluetoothEnabled,
@@ -244,6 +268,53 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
           variant="primary"
           onPress={onOpenSystemSettings}
         />
+      </SettingsSection>
+
+      {/* School Lock */}
+      <SettingsSection title="School Lock" icon="shield-lock">
+        <SettingsSwitch
+          label="Enable School Lock"
+          hint="Show a PIN override splash screen when the configured Wi-Fi network is visible during the selected hours."
+          value={schoolLockEnabled}
+          onValueChange={onSchoolLockEnabledChange}
+        />
+
+        {schoolLockEnabled && (
+          <>
+            <View style={styles.divider} />
+            <SettingsInput
+              label="School Wi-Fi SSID"
+              hint="The lock activates when this network name appears in Wi-Fi scan results. A password is not required."
+              value={schoolLockWifiSsid}
+              onChangeText={onSchoolLockWifiSsidChange}
+              placeholder="School-WiFi"
+              autoCapitalize="none"
+            />
+            <View style={styles.timeRow}>
+              <TimeInput
+                label="Start"
+                value={schoolLockStartTime}
+                onChange={onSchoolLockStartTimeChange}
+                placeholder="08:00"
+              />
+              <TimeInput
+                label="End"
+                value={schoolLockEndTime}
+                onChange={onSchoolLockEndTimeChange}
+                placeholder="15:30"
+              />
+            </View>
+            <DaySelector
+              selectedDays={schoolLockDays}
+              onDaysChange={onSchoolLockDaysChange}
+            />
+            <SettingsInfoBox variant="info">
+              <Text style={styles.infoText}>
+                ℹ️ Android may require Wi-Fi scan permissions for this to work. A correct PIN unlocks FreeKiosk for the current app session; the lock resets after the school network/time condition clears or the app restarts.
+              </Text>
+            </SettingsInfoBox>
+          </>
+        )}
       </SettingsSection>
       
       {/* Return to Settings */}
@@ -603,6 +674,11 @@ const styles = StyleSheet.create({
   timerInput: {
     marginTop: Spacing.md,
     paddingLeft: Spacing.xxl,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
   },
 });
 

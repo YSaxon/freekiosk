@@ -1,0 +1,910 @@
+#!/usr/bin/env bash
+# setup-device.sh — Provision an Android device as a FreeKiosk kiosk.
+#
+# Works on macOS, Linux, and Windows (Git Bash / MSYS2 / WSL).
+#
+# Usage:
+#   ./setup-device.sh [OPTIONS]
+#
+# Options:
+#   --apk FILE        FreeKiosk APK/XAPK to install (skipped if omitted)
+#   --install-only   Only install the APK/XAPK, then exit (for managed/third-party apps)
+#   --config FILE     FreeKiosk backup JSON to push to the device for import
+#   --adb PATH        Path to adb binary (default: adb from $PATH)
+#   --package PKG     FreeKiosk package name (default: com.freekiosk)
+#   --admin COMP      Device admin component (default: com.freekiosk/.DeviceAdminReceiver)
+#   -y / --yes        Auto-accept prompts (still asks before destructive steps)
+#   -h / --help       Show this help and exit
+#
+# What the script does (in order):
+#   1. Verify adb is reachable and wait for exactly one device
+#   2. Print device model / Android version
+#   3. [--apk] Install the APK/XAPK — handling signature mismatches and existing
+#      device-owner status along the way
+#      With --install-only, stop after this step
+#   4. Grant runtime permissions FreeKiosk needs (usage-stats, overlay,
+#      WRITE_SECURE_SETTINGS, accessibility service)
+#   5. Check for secondary Android users and signed-in accounts that would block
+#      set-device-owner
+#   6. Temporarily disable account-provider packages, set FreeKiosk as Device
+#      Owner, then restore only packages this script disabled
+#   7. [--config] Push the backup JSON to /sdcard/Download/ and print import
+#      instructions
+#   8. Disable removable OEM/system companion packages that widen the Settings
+#      surface on some devices
+#   9. Launch FreeKiosk
+
+set -uo pipefail
+
+# ── colours ────────────────────────────────────────────────────────────────────
+if [[ -t 1 ]]; then
+  RED='\033[0;31m'; YELLOW='\033[0;33m'; GREEN='\033[0;32m'
+  CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+else
+  RED=''; YELLOW=''; GREEN=''; CYAN=''; BOLD=''; RESET=''
+fi
+
+info()    { printf '%b %s\n' "${CYAN}[•]${RESET}" "$*"; }
+ok()      { printf '%b %s\n' "${GREEN}[✓]${RESET}" "$*"; }
+warn()    { printf '%b %s\n' "${YELLOW}[!]${RESET}" "$*"; }
+die()     { printf '%b %s\n' "${RED}[✗]${RESET}" "$*" >&2; exit 1; }
+header()  { printf '\n%b\n' "${BOLD}── $* ──${RESET}"; }
+log()     { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >>"$LOG_FILE"; }
+
+# ── defaults ───────────────────────────────────────────────────────────────────
+ADB="adb"
+PACKAGE="com.freekiosk"
+ADMIN_COMPONENT="com.freekiosk/.DeviceAdminReceiver"
+APK_PATH=""
+CONFIG_PATH=""
+AUTO_YES=false
+INSTALL_ONLY=false
+LOG_ROOT="logs/FreeKiosk"
+RUN_ID="$(date +%Y%m%d-%H%M%S)"
+LOG_FILE="$LOG_ROOT/setup-$RUN_ID.log"
+TEMP_DISABLED_PACKAGES=()
+CLEANED_UP=false
+
+mkdir -p "$LOG_ROOT"
+
+# ── argument parsing ───────────────────────────────────────────────────────────
+usage() {
+  sed -n '2,/^set -/{ /^set -/d; s/^# \{0,2\}//; p }' "$0"
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --apk)      APK_PATH="$2";        shift 2 ;;
+    --config)   CONFIG_PATH="$2";     shift 2 ;;
+    --adb)      ADB="$2";             shift 2 ;;
+    --package)  PACKAGE="$2";         shift 2 ;;
+    --admin)    ADMIN_COMPONENT="$2"; shift 2 ;;
+    --install-only) INSTALL_ONLY=true; shift ;;
+    -y|--yes)   AUTO_YES=true;        shift   ;;
+    -h|--help)  usage ;;
+    *)          die "Unknown option: $1  (try --help)" ;;
+  esac
+done
+
+if [[ "$INSTALL_ONLY" == "true" && -z "$APK_PATH" ]]; then
+  die "--install-only requires --apk FILE."
+fi
+
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+# Prompts the user with [y/N]. Returns 0 for yes, 1 for no.
+# With -d flag: default is yes if AUTO_YES is set.
+ask() {
+  local prompt="$1" default="${2:-n}"
+  if [[ "$default" == "y" && "$AUTO_YES" == "true" ]]; then
+    echo -e "${YELLOW}[?]${RESET} $prompt ${YELLOW}[auto-yes]${RESET}"
+    return 0
+  fi
+  local yn_hint
+  [[ "$default" == "y" ]] && yn_hint="[Y/n]" || yn_hint="[y/N]"
+  echo -en "${YELLOW}[?]${RESET} $prompt $yn_hint "
+  read -r answer
+  answer="${answer:-$default}"
+  [[ "${answer,,}" == "y" ]]
+}
+
+# Same but always requires explicit confirmation (never auto-yes).
+ask_destructive() {
+  local prompt="$1"
+  echo -en "${RED}[!]${RESET} $prompt [y/N] "
+  read -r answer
+  [[ "${answer,,}" == "y" ]]
+}
+
+adb_shell() { "$ADB" shell "$@" </dev/null 2>/dev/null; }
+adb_shell_check() { "$ADB" shell "$@" </dev/null; }
+
+adb_logged() {
+  log "adb $*"
+  "$ADB" "$@" </dev/null >>"$LOG_FILE" 2>&1
+}
+
+pkg_installed() {
+  adb_shell "pm list packages $1" | grep -q "^package:$1$"
+}
+
+pkg_disabled() {
+  adb_shell "pm list packages -d $1" | grep -q "^package:$1$"
+}
+
+is_device_owner() {
+  local owners policy
+  owners=$(adb_shell "dpm list-owners" || true)
+  if echo "$owners" | grep -F "$ADMIN_COMPONENT" | grep -q "DeviceOwner"; then
+    return 0
+  fi
+
+  policy=$(adb_shell "dumpsys device_policy" || true)
+  echo "$policy" | grep -q "package=$PACKAGE" \
+    || echo "$policy" | grep -q "mDeviceOwnerPackageName.*$PACKAGE"
+}
+
+account_count() {
+  # Returns the number of signed-in accounts on the device
+  local count
+  count=$(adb_shell "dumpsys account" 2>/dev/null \
+    | grep -c "Account {" || true)
+  echo "${count:-0}"
+}
+
+user_count() {
+  local count
+  count=$(adb_shell "pm list users" | grep -c "UserInfo{" || true)
+  echo "${count:-1}"
+}
+
+device_density_bucket() {
+  local density
+  density=$(adb_shell "wm density" | grep -oE '[0-9]+' | tail -1)
+  density="${density:-320}"
+  if [[ "$density" -le 160 ]]; then
+    echo "mdpi"
+  elif [[ "$density" -le 240 ]]; then
+    echo "hdpi"
+  elif [[ "$density" -le 320 ]]; then
+    echo "xhdpi"
+  elif [[ "$density" -le 480 ]]; then
+    echo "xxhdpi"
+  else
+    echo "xxxhdpi"
+  fi
+}
+
+find_aapt() {
+  if command -v aapt &>/dev/null; then
+    command -v aapt
+    return 0
+  fi
+
+  local sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+  if [[ -z "$sdk_root" && -n "${LOCALAPPDATA:-}" ]]; then
+    sdk_root="$LOCALAPPDATA/Android/Sdk"
+  fi
+
+  if [[ -n "$sdk_root" && -d "$sdk_root/build-tools" ]]; then
+    find "$sdk_root/build-tools" -type f \( -name "aapt" -o -name "aapt.exe" \) 2>/dev/null \
+      | sort -V \
+      | tail -1
+  fi
+}
+
+apk_artifact_package_name() {
+  local artifact="$1"
+  local package_name=""
+
+  if [[ "${artifact,,}" == *.xapk ]]; then
+    package_name=$(unzip -p "$artifact" manifest.json 2>/dev/null \
+      | sed -n 's/.*"package_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+      | head -1)
+  elif [[ "${artifact,,}" == *.apk ]]; then
+    local aapt_bin
+    aapt_bin=$(find_aapt)
+    if [[ -n "$aapt_bin" ]]; then
+      package_name=$("$aapt_bin" dump badging "$artifact" 2>/dev/null \
+        | sed -n "s/^package: name='\([^']*\)'.*/\1/p" \
+        | head -1)
+    fi
+  fi
+
+  echo "$package_name"
+}
+
+select_xapk_splits() {
+  local xapk_path="$1" extract_dir="$2"
+  local abi_list density_bucket
+  abi_list=$(adb_shell "getprop ro.product.cpu.abilist")
+  density_bucket=$(device_density_bucket)
+
+  info "Device ABIs: ${abi_list:-unknown}; density bucket: $density_bucket" >&2
+
+  local -a selected=()
+  local -a base_apks=()
+  local -a abi_splits=()
+  local -a density_splits=()
+  local apk basename split_name abi
+
+  while IFS= read -r apk; do
+    basename="${apk##*/}"
+    if [[ "$basename" == config.*.apk ]]; then
+      split_name="${basename%.apk}"
+      split_name="${split_name#config.}"
+      case "$split_name" in
+        armeabi_v7a|arm64_v8a|x86|x86_64)
+          abi_splits+=("$apk")
+          ;;
+        mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi|tvdpi)
+          density_splits+=("$apk")
+          ;;
+        *)
+          # Include non-ABI/non-density splits such as required feature splits.
+          selected+=("$apk")
+          ;;
+      esac
+    else
+      base_apks+=("$apk")
+    fi
+  done < <(find "$extract_dir" -type f -name '*.apk' | sort)
+
+  [[ "${#base_apks[@]}" -gt 0 ]] || die "No APK files found inside XAPK: $xapk_path"
+  selected=("${base_apks[@]}" "${selected[@]}")
+
+  for abi in ${abi_list//,/ }; do
+    abi="${abi//-/_}"
+    for apk in "${abi_splits[@]}"; do
+      basename="${apk##*/}"
+      if [[ "$basename" == "config.$abi.apk" ]]; then
+        selected+=("$apk")
+        abi_splits=()
+        break 2
+      fi
+    done
+  done
+
+  if [[ "${#abi_splits[@]}" -gt 0 ]]; then
+    die "XAPK contains ABI splits but none match this device ($abi_list)."
+  fi
+
+  for apk in "${density_splits[@]}"; do
+    basename="${apk##*/}"
+    if [[ "$basename" == "config.$density_bucket.apk" ]]; then
+      selected+=("$apk")
+      density_splits=()
+      break
+    fi
+  done
+
+  if [[ "${#density_splits[@]}" -gt 0 ]]; then
+    warn "No exact density split for $density_bucket; installing without density split." >&2
+  fi
+
+  printf '%s\n' "${selected[@]}"
+}
+
+install_artifact() {
+  local artifact="$1"
+  local install_out
+
+  if [[ "${artifact,,}" == *.xapk ]]; then
+    command -v unzip &>/dev/null || die "Installing XAPK files requires 'unzip' in PATH."
+
+    local extract_dir
+    extract_dir="$(mktemp -d "${TMPDIR:-/tmp}/freekiosk-xapk.XXXXXX")" || die "Could not create temporary XAPK directory."
+    unzip -q "$artifact" -d "$extract_dir" || {
+      rm -rf "$extract_dir"
+      die "Could not extract XAPK: $artifact"
+    }
+
+    local -a splits=()
+    local selected_output
+    selected_output=$(select_xapk_splits "$artifact" "$extract_dir") || {
+      rm -rf "$extract_dir"
+      return 1
+    }
+    while IFS= read -r split; do
+      splits+=("$split")
+    done <<<"$selected_output"
+
+    info "Installing XAPK with ${#splits[@]} APK file(s)." >&2
+    printf '  %s\n' "${splits[@]##*/}" >&2
+    install_out=$("$ADB" install-multiple -r "${splits[@]}" 2>&1)
+    rm -rf "$extract_dir"
+  else
+    install_out=$("$ADB" install -r "$artifact" 2>&1)
+  fi
+
+  printf '%s\n' "$install_out"
+}
+
+secondary_user_ids() {
+  adb_shell "pm list users" \
+    | sed -n 's/.*UserInfo{\([0-9][0-9]*\):.*/\1/p' \
+    | grep -v '^0$' || true
+}
+
+account_provider_packages() {
+  {
+    adb_shell "dumpsys account" \
+      | grep -oE '[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+/[A-Za-z0-9_.$]+' \
+      | cut -d/ -f1
+    printf '%s\n' \
+      com.microsoft.office.officehubrow \
+      com.microsoft.office.word \
+      com.microsoft.office.excel \
+      com.microsoft.office.outlook \
+      com.microsoft.office.powerpoint
+  } | sort -u | grep -v "^$PACKAGE$" || true
+}
+
+disable_temporarily() {
+  local pkg="$1" label="${2:-$1}"
+
+  if ! adb_shell "pm list packages $pkg" | grep -q "^package:$pkg$"; then
+    info "$label ($pkg) not present — skipping."
+    return 0
+  fi
+
+  if pkg_disabled "$pkg"; then
+    info "$label ($pkg) already disabled — leaving it unchanged."
+    return 0
+  fi
+
+  info "Temporarily disabling $label ($pkg)."
+  if adb_logged shell pm disable-user --user 0 "$pkg"; then
+    TEMP_DISABLED_PACKAGES+=("$pkg")
+  else
+    warn "Could not disable $label ($pkg); continuing."
+  fi
+}
+
+restore_temp_disabled_packages() {
+  [[ "$CLEANED_UP" == "true" ]] && return 0
+  CLEANED_UP=true
+
+  if [[ "${#TEMP_DISABLED_PACKAGES[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  header "Restoring Temporarily Disabled Packages"
+  local pkg
+  for pkg in "${TEMP_DISABLED_PACKAGES[@]}"; do
+    info "Re-enabling $pkg"
+    adb_logged shell pm enable "$pkg" || warn "Could not re-enable $pkg; check $LOG_FILE"
+  done
+}
+
+trap restore_temp_disabled_packages EXIT
+
+# ── step 1: adb + device ───────────────────────────────────────────────────────
+header "Checking ADB"
+info "Writing setup log to $LOG_FILE"
+log "FreeKiosk setup started"
+
+if ! command -v "$ADB" &>/dev/null; then
+  die "adb not found at '$ADB'. Install Android platform-tools or pass --adb <path>."
+fi
+ok "adb found: $("$ADB" version | head -1)"
+
+info "Starting adb server..."
+adb_logged start-server || die "Could not start adb server. Check $LOG_FILE."
+
+info "Waiting for exactly one device."
+info "Unlock the device, connect USB, and tap 'Allow USB debugging' if prompted."
+while true; do
+  devices_out=$("$ADB" devices 2>/dev/null || true)
+  log "$devices_out"
+  device_count=$(echo "$devices_out" | awk 'NR>1 && /device$/{n++} END{print n+0}')
+  unauthorized_count=$(echo "$devices_out" | awk 'NR>1 && /unauthorized$/{n++} END{print n+0}')
+  offline_count=$(echo "$devices_out" | awk 'NR>1 && /offline$/{n++} END{print n+0}')
+  if [[ "$device_count" -eq 1 ]]; then
+    break
+  elif [[ "$device_count" -gt 1 ]]; then
+    warn "Multiple devices detected — disconnect extras and press Enter."
+    read -r _
+  elif [[ "$unauthorized_count" -gt 0 ]]; then
+    warn "Device is connected but unauthorized."
+    warn "Unlock the device, then tap 'Allow USB debugging' on the device screen."
+    sleep 2
+  elif [[ "$offline_count" -gt 0 ]]; then
+    warn "Device is offline. Replug USB or toggle USB debugging if this does not clear."
+    sleep 2
+  else
+    echo -n "."
+    sleep 2
+  fi
+done
+echo ""
+
+# ── step 2: device info ────────────────────────────────────────────────────────
+header "Device Info"
+model=$(adb_shell "getprop ro.product.model")
+android_ver=$(adb_shell "getprop ro.build.version.release")
+sdk=$(adb_shell "getprop ro.build.version.sdk")
+serial=$("$ADB" get-serialno 2>/dev/null)
+ok "Model   : $model (serial: $serial)"
+ok "Android : $android_ver (SDK $sdk)"
+
+if [[ "${sdk:-0}" -lt 21 ]]; then
+  die "Android SDK $sdk is below the minimum required (21)."
+fi
+
+# ── step 3: install APK ────────────────────────────────────────────────────────
+if [[ -n "$APK_PATH" ]]; then
+  header "Installing APK"
+
+  [[ -f "$APK_PATH" ]] || die "APK not found: $APK_PATH"
+  info "APK: $APK_PATH"
+
+  artifact_package=$(apk_artifact_package_name "$APK_PATH")
+  if [[ -n "$artifact_package" ]]; then
+    info "Artifact package: $artifact_package"
+  elif [[ "$INSTALL_ONLY" != "true" ]]; then
+    warn "Could not determine APK package name; continuing with --package $PACKAGE."
+  fi
+
+  if [[ "$INSTALL_ONLY" != "true" && -n "$artifact_package" && "$artifact_package" != "$PACKAGE" ]]; then
+    die "XAPK package_name is '$artifact_package' but --package is '$PACKAGE'. Pass --package '$artifact_package' or choose the correct artifact."
+  fi
+
+  # Play Protect can race or block local installs on some managed/OEM builds.
+  # Disable only for this run and restore it in the EXIT trap.
+  if [[ "${sdk:-0}" -ge 23 ]]; then
+    disable_temporarily "com.android.vending" "Google Play Store"
+  fi
+
+  if [[ "$INSTALL_ONLY" == "true" ]]; then
+    info "Install-only mode: installing artifact and skipping FreeKiosk provisioning."
+    install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
+    if echo "$install_out" | grep -q "Success"; then
+      ok "Installed successfully."
+      exit 0
+    else
+      die "Install failed: $install_out"
+    fi
+  fi
+
+  if pkg_installed "$PACKAGE"; then
+    info "FreeKiosk ($PACKAGE) is already installed."
+
+    # Try a straightforward upgrade first
+    info "Attempting upgrade install..."
+    install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
+    if echo "$install_out" | grep -q "Success"; then
+      ok "Upgraded successfully."
+    else
+      warn "Upgrade failed: $install_out"
+
+      if echo "$install_out" | grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE"; then
+        warn "Signature mismatch — the installed APK was signed with a different key."
+        warn "To replace it we must uninstall first."
+
+        # We need to remove device owner before we can uninstall
+        if is_device_owner; then
+          if ask_destructive "FreeKiosk is the current Device Owner. Remove device owner status so we can reinstall?"; then
+            info "Removing device owner..."
+            adb_shell_check "dpm remove-active-admin $ADMIN_COMPONENT" || true
+            # On some devices / Android versions the above command doesn't work;
+            # fall back to clearing the app (loses data but always works)
+            if is_device_owner; then
+              warn "dpm remove-active-admin didn't work — trying force-stop + clear..."
+              adb_shell "am force-stop $PACKAGE" || true
+            fi
+          else
+            die "Cannot replace APK without removing device owner. Aborting."
+          fi
+        fi
+
+        echo ""
+        warn "Uninstalling the existing app is required."
+        warn "Option A: keep app data  (pm uninstall -k)  — settings/PIN are preserved"
+        warn "Option B: full uninstall — all data is wiped (import backup afterwards)"
+        echo -en "${YELLOW}[?]${RESET} Which option? [A/b] "
+        read -r choice
+        choice="${choice:-a}"
+
+        if [[ "${choice,,}" == "b" ]]; then
+          if ask_destructive "This will erase all FreeKiosk data. Are you sure?"; then
+            info "Uninstalling (full)..."
+            "$ADB" shell pm uninstall "$PACKAGE" || true
+          else
+            die "Aborting at user request."
+          fi
+        else
+          info "Uninstalling (keeping data)..."
+          "$ADB" shell pm uninstall -k "$PACKAGE" || true
+          # Note: -k keeps the signature record, so a fresh install of a
+          # differently-signed APK will still fail. If that happens, fall back.
+        fi
+
+        info "Installing artifact..."
+        install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
+        if echo "$install_out" | grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE"; then
+          # The -k path kept the sig record — do a full cleanup and retry
+          warn "Signature record still cached after -k uninstall. Doing full uninstall..."
+          if ask_destructive "All remaining FreeKiosk data will be erased. Continue?"; then
+            "$ADB" shell pm uninstall "$PACKAGE" || true
+            install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
+          else
+            die "Aborting at user request."
+          fi
+        fi
+
+        if echo "$install_out" | grep -q "Success"; then
+          ok "Installed successfully."
+        else
+          die "Install failed: $install_out"
+        fi
+
+      else
+        die "Install failed for an unexpected reason: $install_out"
+      fi
+    fi
+
+  else
+    info "FreeKiosk not currently installed — fresh install..."
+    install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
+    if echo "$install_out" | grep -q "Success"; then
+      ok "Installed successfully."
+    else
+      die "Install failed: $install_out"
+    fi
+  fi
+else
+  if pkg_installed "$PACKAGE"; then
+    ok "FreeKiosk is already installed (no --apk provided, skipping install step)."
+  else
+    warn "FreeKiosk does not appear to be installed and no --apk was provided."
+    warn "The remaining steps may fail. Pass --apk to install it."
+  fi
+fi
+
+# ── step 4: permissions ────────────────────────────────────────────────────────
+header "Granting Permissions"
+
+grant_permission() {
+  local label="$1" cmd="$2"
+  if eval "$ADB shell $cmd" &>/dev/null; then
+    ok "$label"
+  else
+    warn "$label — command returned an error (may already be set, continuing)"
+  fi
+}
+
+permission_declared() {
+  local permission="$1"
+  adb_shell "dumpsys package $PACKAGE" | grep -Fq "$permission"
+}
+
+grant_declared_permission() {
+  local label="$1" permission="$2"
+  if ! permission_declared "$permission"; then
+    info "$label not requested by this APK — skipping."
+    return 0
+  fi
+
+  if adb_logged shell pm grant "$PACKAGE" "$permission"; then
+    ok "$label"
+  else
+    warn "$label — could not grant $permission (may be signature-only, already fixed, or unavailable on this Android version)"
+  fi
+}
+
+grant_declared_appop() {
+  local label="$1" permission="$2"
+  shift 2
+
+  if ! permission_declared "$permission"; then
+    info "$label not requested by this APK — skipping."
+    return 0
+  fi
+
+  local op
+  for op in "$@"; do
+    if adb_logged shell appops set "$PACKAGE" "$op" allow; then
+      ok "$label"
+      return 0
+    fi
+  done
+
+  warn "$label — app-op grant failed (may be unavailable on this Android version)"
+}
+
+grant_permission "Usage stats (foreground app detection)" \
+  "appops set $PACKAGE android:get_usage_stats allow"
+
+grant_permission "WRITE_SECURE_SETTINGS (immersive/accessibility toggle)" \
+  "pm grant $PACKAGE android.permission.WRITE_SECURE_SETTINGS"
+
+# Overlay permission — granting before device owner may silently fail on some
+# Android versions. We grant it again after set-device-owner as well.
+grant_permission "System alert window (overlay button)" \
+  "appops set $PACKAGE android:system_alert_window allow"
+
+grant_declared_permission "Camera (motion detection / camera API)" \
+  "android.permission.CAMERA"
+grant_declared_permission "Microphone (WebRTC / audio capture)" \
+  "android.permission.RECORD_AUDIO"
+grant_declared_permission "Fine location (Wi-Fi scan / network status)" \
+  "android.permission.ACCESS_FINE_LOCATION"
+grant_declared_permission "Coarse location (network status fallback)" \
+  "android.permission.ACCESS_COARSE_LOCATION"
+grant_declared_permission "Bluetooth connect (lockscreen / status controls)" \
+  "android.permission.BLUETOOTH_CONNECT"
+grant_declared_permission "Bluetooth scan (nearby devices)" \
+  "android.permission.BLUETOOTH_SCAN"
+grant_declared_permission "Bluetooth advertise (nearby devices)" \
+  "android.permission.BLUETOOTH_ADVERTISE"
+grant_declared_permission "Nearby Wi-Fi devices (Android 13+ Wi-Fi controls)" \
+  "android.permission.NEARBY_WIFI_DEVICES"
+grant_declared_permission "Post notifications (Android 13+ foreground services)" \
+  "android.permission.POST_NOTIFICATIONS"
+grant_declared_permission "Read external storage (backup/media on older Android)" \
+  "android.permission.READ_EXTERNAL_STORAGE"
+grant_declared_permission "Write external storage (backup export on older Android)" \
+  "android.permission.WRITE_EXTERNAL_STORAGE"
+grant_declared_permission "Read media images (Android 13+ media picker)" \
+  "android.permission.READ_MEDIA_IMAGES"
+grant_declared_permission "Read media video (Android 13+ media picker)" \
+  "android.permission.READ_MEDIA_VIDEO"
+grant_declared_permission "Read media audio (Android 13+ media picker)" \
+  "android.permission.READ_MEDIA_AUDIO"
+grant_declared_appop "Install unknown apps (self-update APK install)" \
+  "android.permission.REQUEST_INSTALL_PACKAGES" \
+  "REQUEST_INSTALL_PACKAGES" "android:request_install_packages"
+grant_declared_appop "Write system settings" \
+  "android.permission.WRITE_SETTINGS" \
+  "WRITE_SETTINGS" "android:write_settings"
+grant_declared_appop "Manage all files access" \
+  "android.permission.MANAGE_EXTERNAL_STORAGE" \
+  "MANAGE_EXTERNAL_STORAGE" "android:manage_external_storage"
+
+# Enable the accessibility service — requires WRITE_SECURE_SETTINGS granted above
+info "Enabling FreeKiosk accessibility service..."
+current_a11y=$(adb_shell "settings get secure enabled_accessibility_services" || true)
+if echo "$current_a11y" | grep -q "$PACKAGE"; then
+  ok "Accessibility service already enabled."
+else
+  new_a11y="${current_a11y:+$current_a11y:}${PACKAGE}/.FreeKioskAccessibilityService"
+  if "$ADB" shell settings put secure enabled_accessibility_services "$new_a11y" 2>/dev/null; then
+    ok "Accessibility service enabled."
+  else
+    warn "Could not enable accessibility service automatically — you may need to do this manually in Settings → Accessibility."
+  fi
+fi
+
+# ── step 5a: multiple users check ──────────────────────────────────────────────
+header "Android User Check"
+
+users=$(user_count)
+if [[ "$users" -gt 1 ]]; then
+  warn "Found $users Android users/profiles on the device."
+  warn "Secondary users, Guest, Secure Folder, and Dual Apps profiles can block device-owner activation."
+  echo ""
+  adb_shell "pm list users" || true
+  echo ""
+  warn "Removing secondary users deletes data inside those profiles."
+
+  if ask_destructive "Remove all secondary Android users now?"; then
+    while read -r user_id; do
+      [[ -z "$user_id" ]] && continue
+      info "Removing user/profile $user_id"
+      adb_logged shell pm remove-user "$user_id" || warn "Could not remove user/profile $user_id"
+    done < <(secondary_user_ids)
+
+    users=$(user_count)
+    if [[ "$users" -gt 1 ]]; then
+      warn "Still showing $users users/profiles. Remove remaining profiles manually, then rerun if device-owner activation fails."
+    else
+      ok "Only primary user remains."
+    fi
+  else
+    warn "Leaving secondary users in place. Device-owner activation may fail."
+  fi
+else
+  ok "Only primary Android user is present."
+fi
+
+# ── step 5b: account check ─────────────────────────────────────────────────────
+header "Account Check"
+
+acc_count=$(account_count)
+if [[ "$acc_count" -gt 0 ]]; then
+  warn "Found $acc_count signed-in account(s) on the device."
+  warn "Android requires zero accounts before set-device-owner can succeed."
+  echo ""
+  adb_shell "dumpsys account" 2>/dev/null | grep -A2 "Account {" | head -40 || true
+  echo ""
+
+  provider_packages=$(account_provider_packages)
+  provider_workaround_used=false
+  if [[ -n "$provider_packages" ]]; then
+    warn "Trying the account-provider workaround before asking for manual account removal."
+    warn "This commonly clears OEM preloaded accounts such as carrier/contact placeholders."
+    echo ""
+    echo "$provider_packages" | sed 's/^/  • /'
+    echo ""
+    if ask "Temporarily disable these provider packages until setup exits?" "y"; then
+      provider_workaround_used=true
+      while read -r pkg; do
+        [[ -z "$pkg" ]] && continue
+        disable_temporarily "$pkg" "Account provider"
+      done <<<"$provider_packages"
+      sleep 3
+      acc_count=$(account_count)
+      if [[ "$acc_count" -eq 0 ]]; then
+        ok "No accounts remaining after disabling account providers."
+      fi
+    else
+      warn "Skipping account-provider workaround."
+    fi
+  fi
+
+  if [[ "$acc_count" -gt 0 ]]; then
+    if [[ "$provider_workaround_used" == "true" ]]; then
+      warn "Accounts are still listed after disabling providers."
+      warn "On some OEM builds these are stale carrier/preload account records; device-owner activation may still work."
+      if ask "Try device-owner activation anyway before manual account removal?" "y"; then
+        acc_count=0
+      fi
+    fi
+  fi
+
+  if [[ "$acc_count" -gt 0 ]]; then
+    warn "Please remove all accounts from the device:"
+    warn "  Settings → Accounts (& Backup) → Manage Accounts → remove each one"
+    warn ""
+    warn "For Google accounts on Android 11+, go to:"
+    warn "  Settings → Google → [account] → Remove account"
+    warn ""
+
+    # Open the accounts settings screen for the user
+    info "Opening accounts screen on device..."
+    adb_shell "am start -n 'com.android.settings/com.android.settings.Settings\$AccountDashboardActivity'" &>/dev/null || \
+    adb_shell "am start -n 'com.android.settings/com.android.settings.Settings\$UserAndAccountDashboardActivity'" &>/dev/null || true
+
+    echo -en "${YELLOW}[?]${RESET} Press Enter when all accounts have been removed..."
+    read -r _
+
+    acc_count=$(account_count)
+    if [[ "$acc_count" -gt 0 ]]; then
+      warn "Still showing $acc_count account(s). set-device-owner will likely fail."
+      warn "You can continue and try again after removing accounts manually."
+      if ! ask "Continue anyway?"; then
+        die "Aborting at user request."
+      fi
+    else
+      ok "No accounts remaining."
+    fi
+  fi
+else
+  ok "No accounts on device — good to go."
+fi
+
+header "Account Provider Workaround"
+
+provider_packages=$(account_provider_packages)
+if [[ -n "$provider_packages" ]]; then
+  warn "Some Android builds keep account providers registered after accounts are removed."
+  warn "Temporarily disabling provider apps can make device-owner activation more reliable."
+  echo ""
+  echo "$provider_packages" | sed 's/^/  • /'
+  echo ""
+  if ask "Temporarily disable these provider packages until setup exits?" "y"; then
+    while read -r pkg; do
+      [[ -z "$pkg" ]] && continue
+      disable_temporarily "$pkg" "Account provider"
+    done <<<"$provider_packages"
+    sleep 3
+  else
+    warn "Skipping account-provider workaround."
+  fi
+else
+  ok "No extra account-provider packages detected."
+fi
+
+# ── step 6: set device owner ───────────────────────────────────────────────────
+header "Setting Device Owner"
+
+if is_device_owner; then
+  ok "FreeKiosk is already Device Owner — skipping."
+else
+  info "Running: dpm set-device-owner $ADMIN_COMPONENT"
+  log "adb shell dpm set-device-owner $ADMIN_COMPONENT"
+  dpm_out=$("$ADB" shell dpm set-device-owner "$ADMIN_COMPONENT" 2>&1)
+  printf '%s\n' "$dpm_out" >>"$LOG_FILE"
+  if echo "$dpm_out" | grep -q "Success"; then
+    ok "Device owner set."
+  else
+    warn "set-device-owner failed:"
+    echo "  $dpm_out"
+    echo ""
+    warn "Common causes:"
+    warn "  • Accounts still present — remove them and re-run this script"
+    warn "  • Another app is already device owner:"
+    warn "    adb shell dumpsys device_policy | grep mDeviceOwnerPackageName"
+    warn "  • Multiple users exist: adb shell pm list users"
+    if ! ask "Continue without device owner? (kiosk locking won't work)"; then
+      die "Aborting at user request."
+    fi
+  fi
+fi
+
+restore_temp_disabled_packages
+
+# Re-grant overlay now that we (may) have device owner — this is more reliable post-DO
+info "Re-granting overlay permission post device-owner..."
+"$ADB" shell appops set "$PACKAGE" android:system_alert_window allow &>/dev/null || true
+
+# ── step 7: push config ────────────────────────────────────────────────────────
+if [[ -n "$CONFIG_PATH" ]]; then
+  header "Pushing Config"
+  [[ -f "$CONFIG_PATH" ]] || die "Config file not found: $CONFIG_PATH"
+
+  dest_filename="freekiosk-restore.json"
+  dest_path="/sdcard/Download/$dest_filename"
+
+  info "Pushing $CONFIG_PATH → $dest_path"
+  if "$ADB" push "$CONFIG_PATH" "$dest_path"; then
+    ok "Config pushed."
+    echo ""
+    info "To restore settings inside FreeKiosk:"
+    info "  1. Open FreeKiosk (or use: adb shell am start -n $PACKAGE/.MainActivity)"
+    info "  2. Enter your PIN to reach Settings"
+    info "  3. Scroll to the bottom → Import → pick $dest_filename"
+    echo ""
+  else
+    warn "Push failed — you can copy the file manually to the device's Downloads folder."
+  fi
+fi
+
+# ── step 8: prune removable OEM/settings companions ───────────────────────────
+header "Removing Optional OEM Settings Companions"
+
+remove_user0_package() {
+  local pkg="$1" label="$2"
+  if ! adb_shell "pm list packages $pkg" | grep -q "^package:$pkg$"; then
+    info "$label ($pkg) not present — skipping."
+    return
+  fi
+
+  info "Trying to uninstall $label for user 0: $pkg"
+  local out
+  out=$("$ADB" shell pm uninstall --user 0 "$pkg" 2>&1 || true)
+  if echo "$out" | grep -q "Success"; then
+    ok "$label removed for user 0."
+  else
+    warn "$label could not be removed automatically: $out"
+  fi
+}
+
+# Motorola Help is a known second-hop surface reachable from Settings on some
+# Motorola devices. Settings Intelligence powers the Settings search surface.
+# Removing them for user 0 narrows what a student can reach from Settings while
+# preserving the base Settings app.
+remove_user0_package "com.motorola.help" "Moto Help"
+remove_user0_package "com.android.settings.intelligence" "Settings Intelligence"
+
+# ── step 9: launch ─────────────────────────────────────────────────────────────
+header "Launching FreeKiosk"
+
+if pkg_installed "$PACKAGE"; then
+  if ask "Launch FreeKiosk now?" "y"; then
+    "$ADB" shell am start -n "$PACKAGE/.MainActivity" &>/dev/null
+    ok "FreeKiosk launched."
+  fi
+else
+  warn "Package $PACKAGE not found on device — cannot launch."
+fi
+
+# ── done ───────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${GREEN}${BOLD}Setup complete.${RESET}"
+if [[ -n "$CONFIG_PATH" ]]; then
+  echo -e "  Import your backup from: ${BOLD}/sdcard/Download/freekiosk-restore.json${RESET}"
+fi
+echo ""

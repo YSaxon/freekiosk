@@ -256,6 +256,11 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
         // Without this, the first call clears blockAutoRelaunch, and the
         // second call sees it as false → triggers unwanted relaunch.
         appStateRef.current = nextAppState;
+
+        if (!isFocusedRef.current) {
+          console.log('[KioskScreen] AppState: skipping relaunch (Kiosk screen not focused)');
+          return;
+        }
         
         // If navigateToPin is in progress, skip all relaunch logic
         if (isNavigatingToPinRef.current) {
@@ -324,6 +329,10 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
           if (currentDisplayMode === 'external_app' && currentPackage) {
             console.log('[KioskScreen] Immediate mode: relaunching', currentPackage);
             appLaunchTimeoutRef.current = setTimeout(() => {
+              if (!isFocusedRef.current || isNavigatingToPinRef.current) {
+                console.log('[KioskScreen] Delayed relaunch skipped (Kiosk not focused or PIN navigation active)');
+                return;
+              }
               launchExternalApp(currentPackage);
             }, 300);
           }
@@ -857,6 +866,10 @@ const KioskScreen: React.FC<KioskScreenProps> = ({ navigation }) => {
     } else if (countdownActive && countdownSeconds === 0) {
       // Countdown finished
       setCountdownActive(false);
+      if (!isFocusedRef.current || isNavigatingToPinRef.current) {
+        console.log('[KioskScreen] Countdown relaunch skipped (Kiosk not focused or PIN navigation active)');
+        return;
+      }
       // Read fresh mode from ref (updated by loadSettings)
       if (externalAppModeRef.current === 'multi') {
         // Multi-app mode: return to grid (never relaunch a specific app)

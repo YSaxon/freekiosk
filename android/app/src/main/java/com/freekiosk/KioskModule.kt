@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.SystemClock
+import android.os.Bundle
 import android.view.KeyEvent
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -24,6 +25,8 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
     private var wakeLock: PowerManager.WakeLock? = null
     private val emergencyDialAction = "android.intent.action.DIAL_EMERGENCY"
     private val emergencyDialerAction = "com.android.phone.EmergencyDialer.DIAL"
+    private val gboardPackageName = "com.google.android.inputmethod.latin"
+    private val gboardPreventExternalIntentsKey = "prevent_external_intents"
 
     companion object {
         // Store the current instance to allow sending events from MainActivity
@@ -135,6 +138,8 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
                         val adminComponent = ComponentName(reactApplicationContext, DeviceAdminReceiver::class.java)
 
                         if (dpm.isDeviceOwnerApp(reactApplicationContext.packageName)) {
+                            applyGboardManagedRestrictions(dpm, adminComponent)
+
                             // Build whitelist: FreeKiosk + external app + all managed apps
                             val whitelist = mutableListOf(reactApplicationContext.packageName)
 
@@ -228,6 +233,28 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
             }
         } catch (e: Exception) {
             promise.reject("ERROR", "Failed to start lock task: ${e.message}")
+        }
+    }
+
+    private fun applyGboardManagedRestrictions(dpm: DevicePolicyManager, adminComponent: ComponentName) {
+        try {
+            reactApplicationContext.packageManager.getPackageInfo(gboardPackageName, 0)
+        } catch (_: Exception) {
+            android.util.Log.d("KioskModule", "Gboard not installed; skipping managed restrictions")
+            return
+        }
+
+        try {
+            val restrictions = Bundle().apply {
+                putBoolean(gboardPreventExternalIntentsKey, true)
+            }
+            dpm.setApplicationRestrictions(adminComponent, gboardPackageName, restrictions)
+            android.util.Log.d(
+                "KioskModule",
+                "Applied Gboard managed restrictions: $gboardPreventExternalIntentsKey=true"
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("KioskModule", "Failed to apply Gboard managed restrictions: ${e.message}")
         }
     }
 

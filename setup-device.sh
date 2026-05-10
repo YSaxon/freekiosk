@@ -524,6 +524,45 @@ grant_permission() {
   fi
 }
 
+permission_declared() {
+  local permission="$1"
+  adb_shell "dumpsys package $PACKAGE" | grep -Fq "$permission"
+}
+
+grant_declared_permission() {
+  local label="$1" permission="$2"
+  if ! permission_declared "$permission"; then
+    info "$label not requested by this APK — skipping."
+    return 0
+  fi
+
+  if adb_logged shell pm grant "$PACKAGE" "$permission"; then
+    ok "$label"
+  else
+    warn "$label — could not grant $permission (may be signature-only, already fixed, or unavailable on this Android version)"
+  fi
+}
+
+grant_declared_appop() {
+  local label="$1" permission="$2"
+  shift 2
+
+  if ! permission_declared "$permission"; then
+    info "$label not requested by this APK — skipping."
+    return 0
+  fi
+
+  local op
+  for op in "$@"; do
+    if adb_logged shell appops set "$PACKAGE" "$op" allow; then
+      ok "$label"
+      return 0
+    fi
+  done
+
+  warn "$label — app-op grant failed (may be unavailable on this Android version)"
+}
+
 grant_permission "Usage stats (foreground app detection)" \
   "appops set $PACKAGE android:get_usage_stats allow"
 
@@ -534,6 +573,44 @@ grant_permission "WRITE_SECURE_SETTINGS (immersive/accessibility toggle)" \
 # Android versions. We grant it again after set-device-owner as well.
 grant_permission "System alert window (overlay button)" \
   "appops set $PACKAGE android:system_alert_window allow"
+
+grant_declared_permission "Camera (motion detection / camera API)" \
+  "android.permission.CAMERA"
+grant_declared_permission "Microphone (WebRTC / audio capture)" \
+  "android.permission.RECORD_AUDIO"
+grant_declared_permission "Fine location (Wi-Fi scan / network status)" \
+  "android.permission.ACCESS_FINE_LOCATION"
+grant_declared_permission "Coarse location (network status fallback)" \
+  "android.permission.ACCESS_COARSE_LOCATION"
+grant_declared_permission "Bluetooth connect (lockscreen / status controls)" \
+  "android.permission.BLUETOOTH_CONNECT"
+grant_declared_permission "Bluetooth scan (nearby devices)" \
+  "android.permission.BLUETOOTH_SCAN"
+grant_declared_permission "Bluetooth advertise (nearby devices)" \
+  "android.permission.BLUETOOTH_ADVERTISE"
+grant_declared_permission "Nearby Wi-Fi devices (Android 13+ Wi-Fi controls)" \
+  "android.permission.NEARBY_WIFI_DEVICES"
+grant_declared_permission "Post notifications (Android 13+ foreground services)" \
+  "android.permission.POST_NOTIFICATIONS"
+grant_declared_permission "Read external storage (backup/media on older Android)" \
+  "android.permission.READ_EXTERNAL_STORAGE"
+grant_declared_permission "Write external storage (backup export on older Android)" \
+  "android.permission.WRITE_EXTERNAL_STORAGE"
+grant_declared_permission "Read media images (Android 13+ media picker)" \
+  "android.permission.READ_MEDIA_IMAGES"
+grant_declared_permission "Read media video (Android 13+ media picker)" \
+  "android.permission.READ_MEDIA_VIDEO"
+grant_declared_permission "Read media audio (Android 13+ media picker)" \
+  "android.permission.READ_MEDIA_AUDIO"
+grant_declared_appop "Install unknown apps (self-update APK install)" \
+  "android.permission.REQUEST_INSTALL_PACKAGES" \
+  "REQUEST_INSTALL_PACKAGES" "android:request_install_packages"
+grant_declared_appop "Write system settings" \
+  "android.permission.WRITE_SETTINGS" \
+  "WRITE_SETTINGS" "android:write_settings"
+grant_declared_appop "Manage all files access" \
+  "android.permission.MANAGE_EXTERNAL_STORAGE" \
+  "MANAGE_EXTERNAL_STORAGE" "android:manage_external_storage"
 
 # Enable the accessibility service — requires WRITE_SECURE_SETTINGS granted above
 info "Enabling FreeKiosk accessibility service..."

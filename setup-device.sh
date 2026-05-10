@@ -8,6 +8,7 @@
 #
 # Options:
 #   --apk FILE        FreeKiosk APK/XAPK to install (skipped if omitted)
+#   --install-only   Only install the APK/XAPK, then exit (for managed/third-party apps)
 #   --config FILE     FreeKiosk backup JSON to push to the device for import
 #   --adb PATH        Path to adb binary (default: adb from $PATH)
 #   --package PKG     FreeKiosk package name (default: com.freekiosk)
@@ -20,6 +21,7 @@
 #   2. Print device model / Android version
 #   3. [--apk] Install the APK/XAPK — handling signature mismatches and existing
 #      device-owner status along the way
+#      With --install-only, stop after this step
 #   4. Grant runtime permissions FreeKiosk needs (usage-stats, overlay,
 #      WRITE_SECURE_SETTINGS, accessibility service)
 #   5. Check for secondary Android users and signed-in accounts that would block
@@ -42,11 +44,11 @@ else
   RED=''; YELLOW=''; GREEN=''; CYAN=''; BOLD=''; RESET=''
 fi
 
-info()    { echo -e "${CYAN}[•]${RESET} $*"; }
-ok()      { echo -e "${GREEN}[✓]${RESET} $*"; }
-warn()    { echo -e "${YELLOW}[!]${RESET} $*"; }
-die()     { echo -e "${RED}[✗]${RESET} $*" >&2; exit 1; }
-header()  { echo -e "\n${BOLD}── $* ──${RESET}"; }
+info()    { printf '%b %s\n' "${CYAN}[•]${RESET}" "$*"; }
+ok()      { printf '%b %s\n' "${GREEN}[✓]${RESET}" "$*"; }
+warn()    { printf '%b %s\n' "${YELLOW}[!]${RESET}" "$*"; }
+die()     { printf '%b %s\n' "${RED}[✗]${RESET}" "$*" >&2; exit 1; }
+header()  { printf '\n%b\n' "${BOLD}── $* ──${RESET}"; }
 log()     { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >>"$LOG_FILE"; }
 
 # ── defaults ───────────────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ ADMIN_COMPONENT="com.freekiosk/.DeviceAdminReceiver"
 APK_PATH=""
 CONFIG_PATH=""
 AUTO_YES=false
+INSTALL_ONLY=false
 LOG_ROOT="logs/FreeKiosk"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="$LOG_ROOT/setup-$RUN_ID.log"
@@ -77,11 +80,16 @@ while [[ $# -gt 0 ]]; do
     --adb)      ADB="$2";             shift 2 ;;
     --package)  PACKAGE="$2";         shift 2 ;;
     --admin)    ADMIN_COMPONENT="$2"; shift 2 ;;
+    --install-only) INSTALL_ONLY=true; shift ;;
     -y|--yes)   AUTO_YES=true;        shift   ;;
     -h|--help)  usage ;;
     *)          die "Unknown option: $1  (try --help)" ;;
   esac
 done
+
+if [[ "$INSTALL_ONLY" == "true" && -z "$APK_PATH" ]]; then
+  die "--install-only requires --apk FILE."
+fi
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -168,6 +176,24 @@ device_density_bucket() {
   fi
 }
 
+find_aapt() {
+  if command -v aapt &>/dev/null; then
+    command -v aapt
+    return 0
+  fi
+
+  local sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+  if [[ -z "$sdk_root" && -n "${LOCALAPPDATA:-}" ]]; then
+    sdk_root="$LOCALAPPDATA/Android/Sdk"
+  fi
+
+  if [[ -n "$sdk_root" && -d "$sdk_root/build-tools" ]]; then
+    find "$sdk_root/build-tools" -type f \( -name "aapt" -o -name "aapt.exe" \) 2>/dev/null \
+      | sort -V \
+      | tail -1
+  fi
+}
+
 apk_artifact_package_name() {
   local artifact="$1"
   local package_name=""
@@ -176,6 +202,14 @@ apk_artifact_package_name() {
     package_name=$(unzip -p "$artifact" manifest.json 2>/dev/null \
       | sed -n 's/.*"package_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
       | head -1)
+  elif [[ "${artifact,,}" == *.apk ]]; then
+    local aapt_bin
+    aapt_bin=$(find_aapt)
+    if [[ -n "$aapt_bin" ]]; then
+      package_name=$("$aapt_bin" dump badging "$artifact" 2>/dev/null \
+        | sed -n "s/^package: name='\([^']*\)'.*/\1/p" \
+        | head -1)
+    fi
   fi
 
   echo "$package_name"
@@ -407,7 +441,13 @@ if [[ -n "$APK_PATH" ]]; then
   info "APK: $APK_PATH"
 
   artifact_package=$(apk_artifact_package_name "$APK_PATH")
-  if [[ -n "$artifact_package" && "$artifact_package" != "$PACKAGE" ]]; then
+  if [[ -n "$artifact_package" ]]; then
+    info "Artifact package: $artifact_package"
+  elif [[ "$INSTALL_ONLY" != "true" ]]; then
+    warn "Could not determine APK package name; continuing with --package $PACKAGE."
+  fi
+
+  if [[ "$INSTALL_ONLY" != "true" && -n "$artifact_package" && "$artifact_package" != "$PACKAGE" ]]; then
     die "XAPK package_name is '$artifact_package' but --package is '$PACKAGE'. Pass --package '$artifact_package' or choose the correct artifact."
   fi
 
@@ -415,6 +455,17 @@ if [[ -n "$APK_PATH" ]]; then
   # Disable only for this run and restore it in the EXIT trap.
   if [[ "${sdk:-0}" -ge 23 ]]; then
     disable_temporarily "com.android.vending" "Google Play Store"
+  fi
+
+  if [[ "$INSTALL_ONLY" == "true" ]]; then
+    info "Install-only mode: installing artifact and skipping FreeKiosk provisioning."
+    install_out=$(install_artifact "$APK_PATH") || die "Install command failed: $install_out"
+    if echo "$install_out" | grep -q "Success"; then
+      ok "Installed successfully."
+      exit 0
+    else
+      die "Install failed: $install_out"
+    fi
   fi
 
   if pkg_installed "$PACKAGE"; then

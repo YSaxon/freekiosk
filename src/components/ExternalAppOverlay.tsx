@@ -21,8 +21,10 @@ interface ExternalAppOverlayProps {
   returnTapTimeout?: number;
   /** Whether the return button is visible (button mode only) */
   returnButtonVisible?: boolean;
-  /** Button position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' */
+  /** Button position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'custom' */
   returnButtonPosition?: string;
+  returnButtonXPercent?: number;
+  returnButtonYPercent?: number;
   showStatusBar?: boolean;
   showBattery?: boolean;
   showWifi?: boolean;
@@ -46,6 +48,8 @@ const ExternalAppOverlay: React.FC<ExternalAppOverlayProps> = ({
   returnTapTimeout = 1500,
   returnButtonVisible = false,
   returnButtonPosition = 'bottom-right',
+  returnButtonXPercent = 92,
+  returnButtonYPercent = 92,
   showStatusBar = false,
   showBattery = true,
   showWifi = true,
@@ -124,6 +128,16 @@ const ExternalAppOverlay: React.FC<ExternalAppOverlayProps> = ({
 
   // Button position style (same positions as WebView / OverlayService)
   const buttonPositionStyle = useMemo(() => {
+    if (returnButtonPosition === 'custom') {
+      const safeX = Math.max(4, Math.min(96, returnButtonXPercent));
+      const safeY = Math.max(4, Math.min(96, returnButtonYPercent));
+      return {
+        left: `${safeX}%`,
+        top: `${safeY}%`,
+        marginLeft: -25,
+        marginTop: -25,
+      };
+    }
     switch (returnButtonPosition) {
       case 'top-left': return { top: 20, left: 20 };
       case 'top-right': return { top: 20, right: 20 };
@@ -131,7 +145,7 @@ const ExternalAppOverlay: React.FC<ExternalAppOverlayProps> = ({
       case 'bottom-right':
       default: return { bottom: 20, right: 20 };
     }
-  }, [returnButtonPosition]);
+  }, [returnButtonPosition, returnButtonXPercent, returnButtonYPercent]);
   
   // Only show multi-app grid when explicitly in multi mode
   const homeScreenApps = externalAppMode === 'multi' ? managedApps.filter(app => app.showOnHomeScreen) : [];

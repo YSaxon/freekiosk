@@ -83,6 +83,8 @@ const PinScreen: React.FC<PinScreenProps> = ({ navigation }) => {
         const returnTapTimeout = await StorageService.getReturnTapTimeout();
         const returnMode = await StorageService.getReturnMode();
         const returnButtonPosition = await StorageService.getReturnButtonPosition();
+        const returnButtonXPercent = await StorageService.getReturnButtonXPercent();
+        const returnButtonYPercent = await StorageService.getReturnButtonYPercent();
         const autoRelaunch = await StorageService.getAutoRelaunchApp();
         
         // Start OverlayService BEFORE launching the external app
@@ -93,6 +95,8 @@ const PinScreen: React.FC<PinScreenProps> = ({ navigation }) => {
           returnTapTimeout, 
           returnMode, 
           returnButtonPosition,
+          returnButtonXPercent,
+          returnButtonYPercent,
           externalAppPackage,
           autoRelaunch,
           nfcEnabled

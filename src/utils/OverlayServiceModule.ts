@@ -6,6 +6,8 @@ interface OverlayServiceModuleType {
     tapTimeout: number, 
     returnMode: string, 
     buttonPosition: string,
+    buttonXPercent?: number,
+    buttonYPercent?: number,
     lockedPackage?: string | null,
     autoRelaunch?: boolean,
     nfcEnabled?: boolean

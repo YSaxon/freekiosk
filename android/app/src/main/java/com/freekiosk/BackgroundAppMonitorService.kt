@@ -113,7 +113,13 @@ class BackgroundAppMonitorService : Service() {
         }
 
         val now = System.currentTimeMillis()
+        val externalAppPackage = readExternalAppPackage()
         for (packageName in keepAlivePackages) {
+            if (packageName == externalAppPackage) {
+                DebugLog.d(TAG, "Skipping keep-alive relaunch for active external app while FreeKiosk is foreground: $packageName")
+                continue
+            }
+
             if (!isAppProcessRunning(packageName)) {
                 // Check cooldown to avoid relaunch storms
                 val lastRelaunch = relaunchTimestamps[packageName] ?: 0L
@@ -301,6 +307,41 @@ class BackgroundAppMonitorService : Service() {
         } catch (e: Exception) {
             DebugLog.d(TAG, "Could not read managed apps: ${e.message}")
             emptyList()
+        }
+    }
+
+    /**
+     * The primary external app is managed by the external-app/overlay flow.
+     * Relaunching it from the keep-alive monitor while FreeKiosk is foreground
+     * causes a visible flash on the PIN/admin screens.
+     */
+    private fun readExternalAppPackage(): String? {
+        return try {
+            val dbPath = getDatabasePath("RKStorage").absolutePath
+            val db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY)
+            val displayCursor = db.rawQuery(
+                "SELECT value FROM catalystLocalStorage WHERE key = ?",
+                arrayOf("@kiosk_display_mode")
+            )
+            val displayMode = if (displayCursor.moveToFirst()) displayCursor.getString(0) else null
+            displayCursor.close()
+
+            if (displayMode != "external_app") {
+                db.close()
+                return null
+            }
+
+            val packageCursor = db.rawQuery(
+                "SELECT value FROM catalystLocalStorage WHERE key = ?",
+                arrayOf("@kiosk_external_app_package")
+            )
+            val packageName = if (packageCursor.moveToFirst()) packageCursor.getString(0) else null
+            packageCursor.close()
+            db.close()
+            packageName?.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            DebugLog.d(TAG, "Could not read external app package: ${e.message}")
+            null
         }
     }
 

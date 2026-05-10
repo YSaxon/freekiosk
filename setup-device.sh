@@ -109,12 +109,12 @@ ask_destructive() {
   [[ "${answer,,}" == "y" ]]
 }
 
-adb_shell() { "$ADB" shell "$@" 2>/dev/null; }
-adb_shell_check() { "$ADB" shell "$@"; }
+adb_shell() { "$ADB" shell "$@" </dev/null 2>/dev/null; }
+adb_shell_check() { "$ADB" shell "$@" </dev/null; }
 
 adb_logged() {
   log "adb $*"
-  "$ADB" "$@" >>"$LOG_FILE" 2>&1
+  "$ADB" "$@" </dev/null >>"$LOG_FILE" 2>&1
 }
 
 pkg_installed() {
@@ -126,8 +126,15 @@ pkg_disabled() {
 }
 
 is_device_owner() {
-  adb_shell "dumpsys device_policy" 2>/dev/null \
-    | grep -q "mDeviceOwnerPackageName.*$PACKAGE"
+  local owners policy
+  owners=$(adb_shell "dpm list-owners" || true)
+  if echo "$owners" | grep -F "$ADMIN_COMPONENT" | grep -q "DeviceOwner"; then
+    return 0
+  fi
+
+  policy=$(adb_shell "dumpsys device_policy" || true)
+  echo "$policy" | grep -q "package=$PACKAGE" \
+    || echo "$policy" | grep -q "mDeviceOwnerPackageName.*$PACKAGE"
 }
 
 account_count() {
@@ -352,7 +359,8 @@ ok "adb found: $("$ADB" version | head -1)"
 info "Starting adb server..."
 adb_logged start-server || die "Could not start adb server. Check $LOG_FILE."
 
-info "Waiting for exactly one device (connect via USB and allow debugging)..."
+info "Waiting for exactly one device."
+info "Unlock the device, connect USB, and tap 'Allow USB debugging' if prompted."
 while true; do
   devices_out=$("$ADB" devices 2>/dev/null || true)
   log "$devices_out"
@@ -365,7 +373,8 @@ while true; do
     warn "Multiple devices detected — disconnect extras and press Enter."
     read -r _
   elif [[ "$unauthorized_count" -gt 0 ]]; then
-    warn "Device is connected but unauthorized. Accept the USB debugging prompt on the device."
+    warn "Device is connected but unauthorized."
+    warn "Unlock the device, then tap 'Allow USB debugging' on the device screen."
     sleep 2
   elif [[ "$offline_count" -gt 0 ]]; then
     warn "Device is offline. Replug USB or toggle USB debugging if this does not clear."
@@ -582,30 +591,67 @@ if [[ "$acc_count" -gt 0 ]]; then
   echo ""
   adb_shell "dumpsys account" 2>/dev/null | grep -A2 "Account {" | head -40 || true
   echo ""
-  warn "Please remove all accounts from the device:"
-  warn "  Settings → Accounts (& Backup) → Manage Accounts → remove each one"
-  warn ""
-  warn "For Google accounts on Android 11+, go to:"
-  warn "  Settings → Google → [account] → Remove account"
-  warn ""
 
-  # Open the accounts settings screen for the user
-  info "Opening accounts screen on device..."
-  adb_shell "am start -n 'com.android.settings/com.android.settings.Settings\$AccountDashboardActivity'" &>/dev/null || \
-  adb_shell "am start -n 'com.android.settings/com.android.settings.Settings\$UserAndAccountDashboardActivity'" &>/dev/null || true
-
-  echo -en "${YELLOW}[?]${RESET} Press Enter when all accounts have been removed..."
-  read -r _
-
-  acc_count=$(account_count)
-  if [[ "$acc_count" -gt 0 ]]; then
-    warn "Still showing $acc_count account(s). set-device-owner will likely fail."
-    warn "You can continue and try again after removing accounts manually."
-    if ! ask "Continue anyway?"; then
-      die "Aborting at user request."
+  provider_packages=$(account_provider_packages)
+  provider_workaround_used=false
+  if [[ -n "$provider_packages" ]]; then
+    warn "Trying the account-provider workaround before asking for manual account removal."
+    warn "This commonly clears OEM preloaded accounts such as carrier/contact placeholders."
+    echo ""
+    echo "$provider_packages" | sed 's/^/  • /'
+    echo ""
+    if ask "Temporarily disable these provider packages until setup exits?" "y"; then
+      provider_workaround_used=true
+      while read -r pkg; do
+        [[ -z "$pkg" ]] && continue
+        disable_temporarily "$pkg" "Account provider"
+      done <<<"$provider_packages"
+      sleep 3
+      acc_count=$(account_count)
+      if [[ "$acc_count" -eq 0 ]]; then
+        ok "No accounts remaining after disabling account providers."
+      fi
+    else
+      warn "Skipping account-provider workaround."
     fi
-  else
-    ok "No accounts remaining."
+  fi
+
+  if [[ "$acc_count" -gt 0 ]]; then
+    if [[ "$provider_workaround_used" == "true" ]]; then
+      warn "Accounts are still listed after disabling providers."
+      warn "On some OEM builds these are stale carrier/preload account records; device-owner activation may still work."
+      if ask "Try device-owner activation anyway before manual account removal?" "y"; then
+        acc_count=0
+      fi
+    fi
+  fi
+
+  if [[ "$acc_count" -gt 0 ]]; then
+    warn "Please remove all accounts from the device:"
+    warn "  Settings → Accounts (& Backup) → Manage Accounts → remove each one"
+    warn ""
+    warn "For Google accounts on Android 11+, go to:"
+    warn "  Settings → Google → [account] → Remove account"
+    warn ""
+
+    # Open the accounts settings screen for the user
+    info "Opening accounts screen on device..."
+    adb_shell "am start -n 'com.android.settings/com.android.settings.Settings\$AccountDashboardActivity'" &>/dev/null || \
+    adb_shell "am start -n 'com.android.settings/com.android.settings.Settings\$UserAndAccountDashboardActivity'" &>/dev/null || true
+
+    echo -en "${YELLOW}[?]${RESET} Press Enter when all accounts have been removed..."
+    read -r _
+
+    acc_count=$(account_count)
+    if [[ "$acc_count" -gt 0 ]]; then
+      warn "Still showing $acc_count account(s). set-device-owner will likely fail."
+      warn "You can continue and try again after removing accounts manually."
+      if ! ask "Continue anyway?"; then
+        die "Aborting at user request."
+      fi
+    else
+      ok "No accounts remaining."
+    fi
   fi
 else
   ok "No accounts on device — good to go."

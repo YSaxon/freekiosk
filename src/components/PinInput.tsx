@@ -53,7 +53,8 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
   }, []);
 
   const loadLockscreenSettings = async (): Promise<void> => {
-    const [wifi, bluetooth, audio, emergency, flashlight, brightness, rotationLock] = await Promise.all([
+    const [controlsEnabled, wifi, bluetooth, audio, emergency, flashlight, brightness, rotationLock] = await Promise.all([
+      StorageService.getLockscreenControlsEnabled(),
       StorageService.getLockscreenWifiEnabled(),
       StorageService.getLockscreenBluetoothEnabled(),
       StorageService.getLockscreenAudioEnabled(),
@@ -63,15 +64,15 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
       StorageService.getLockscreenRotationLockEnabled(),
     ]);
 
-    setShowWifiButton(wifi);
-    setShowBluetoothButton(bluetooth);
-    setShowAudioControls(audio);
-    setShowEmergencyButton(emergency);
-    setShowFlashlightButton(flashlight);
-    setShowBrightnessButton(brightness);
-    setShowRotationLockButton(rotationLock);
+    setShowWifiButton(controlsEnabled && wifi);
+    setShowBluetoothButton(controlsEnabled && bluetooth);
+    setShowAudioControls(controlsEnabled && audio);
+    setShowEmergencyButton(controlsEnabled && emergency);
+    setShowFlashlightButton(controlsEnabled && flashlight);
+    setShowBrightnessButton(controlsEnabled && brightness);
+    setShowRotationLockButton(controlsEnabled && rotationLock);
 
-    if (flashlight && FlashlightModule?.isAvailable) {
+    if (controlsEnabled && flashlight && FlashlightModule?.isAvailable) {
       try {
         const available = await FlashlightModule.isAvailable();
         setFlashlightAvailable(Boolean(available));
@@ -85,7 +86,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
       }
     }
 
-    if (rotationLock && RotationControlModule?.isAvailable) {
+    if (controlsEnabled && rotationLock && RotationControlModule?.isAvailable) {
       try {
         const available = await RotationControlModule.isAvailable();
         setRotationLockAvailable(Boolean(available));
@@ -378,7 +379,7 @@ const PinInput: React.FC<PinInputProps> = ({ onSuccess }) => {
           {showEmergencyButton && (
             <TouchableOpacity style={[styles.quickBtn, styles.emergencyBtn]} onPress={handleEmergencyCall}>
               <Text style={styles.quickBtnIcon}>🆘</Text>
-              <Text style={[styles.quickBtnLabel, styles.emergencyLabel]}>911</Text>
+              <Text style={[styles.quickBtnLabel, styles.emergencyLabel]}>Emergency</Text>
             </TouchableOpacity>
           )}
         </View>

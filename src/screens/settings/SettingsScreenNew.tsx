@@ -196,6 +196,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [schoolLockDays, setSchoolLockDays] = useState<number[]>([1, 2, 3, 4, 5]);
 
   // Lock Screen Controls states
+  const [lockscreenControlsEnabled, setLockscreenControlsEnabled] = useState<boolean>(false);
   const [lockscreenWifiEnabled, setLockscreenWifiEnabled] = useState<boolean>(false);
   const [lockscreenBluetoothEnabled, setLockscreenBluetoothEnabled] = useState<boolean>(false);
   const [lockscreenEmergencyCallEnabled, setLockscreenEmergencyCallEnabled] = useState<boolean>(false);
@@ -634,6 +635,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     setSchoolLockDays(savedSchoolLockDays);
 
     // Lock Screen Controls settings
+    const savedLockscreenControls = await StorageService.getLockscreenControlsEnabled();
     const savedLockscreenWifi = await StorageService.getLockscreenWifiEnabled();
     const savedLockscreenBt = await StorageService.getLockscreenBluetoothEnabled();
     const savedLockscreenEmergency = await StorageService.getLockscreenEmergencyCallEnabled();
@@ -641,6 +643,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const savedLockscreenFlashlight = await StorageService.getLockscreenFlashlightEnabled();
     const savedLockscreenBrightness = await StorageService.getLockscreenBrightnessEnabled();
     const savedLockscreenRotationLock = await StorageService.getLockscreenRotationLockEnabled();
+    setLockscreenControlsEnabled(savedLockscreenControls);
     setLockscreenWifiEnabled(savedLockscreenWifi);
     setLockscreenBluetoothEnabled(savedLockscreenBt);
     setLockscreenEmergencyCallEnabled(savedLockscreenEmergency);
@@ -908,6 +911,27 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
       } catch (error) {
         // Silent fail
       }
+    }
+  };
+
+  const handleLockscreenControlsEnabledChange = (enabled: boolean) => {
+    setLockscreenControlsEnabled(enabled);
+
+    if (
+      enabled &&
+      !lockscreenWifiEnabled &&
+      !lockscreenBluetoothEnabled &&
+      !lockscreenEmergencyCallEnabled &&
+      !lockscreenAudioEnabled &&
+      !lockscreenFlashlightEnabled &&
+      !lockscreenBrightnessEnabled
+    ) {
+      setLockscreenWifiEnabled(true);
+      setLockscreenBluetoothEnabled(true);
+      setLockscreenEmergencyCallEnabled(true);
+      setLockscreenAudioEnabled(true);
+      setLockscreenFlashlightEnabled(true);
+      setLockscreenBrightnessEnabled(true);
     }
   };
 
@@ -1379,6 +1403,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveSchoolLockDays(schoolLockDays);
 
     // Save Lock Screen Controls settings
+    await StorageService.saveLockscreenControlsEnabled(lockscreenControlsEnabled);
     await StorageService.saveLockscreenWifiEnabled(lockscreenWifiEnabled);
     await StorageService.saveLockscreenBluetoothEnabled(lockscreenBluetoothEnabled);
     await StorageService.saveLockscreenEmergencyCallEnabled(lockscreenEmergencyCallEnabled);
@@ -1974,6 +1999,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             onSchoolLockEndTimeChange={setSchoolLockEndTime}
             schoolLockDays={schoolLockDays}
             onSchoolLockDaysChange={setSchoolLockDays}
+            lockscreenControlsEnabled={lockscreenControlsEnabled}
+            onLockscreenControlsEnabledChange={handleLockscreenControlsEnabledChange}
             lockscreenWifiEnabled={lockscreenWifiEnabled}
             onLockscreenWifiEnabledChange={setLockscreenWifiEnabled}
             lockscreenBluetoothEnabled={lockscreenBluetoothEnabled}

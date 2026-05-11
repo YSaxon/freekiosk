@@ -9,6 +9,12 @@
 # Options:
 #   --apk FILE        FreeKiosk APK/XAPK to install (skipped if omitted)
 #   --install-only   Only install the APK/XAPK, then exit (for managed/third-party apps)
+#   --preset-apps LIST
+#                   Download and install APKPure preset apps via apkeep.
+#                   LIST may be "prompt", "all", or comma-separated preset IDs.
+#   --preset-dir DIR
+#                   Directory for apkeep downloads (default: logs/FreeKiosk/apkpure-<run>)
+#   --apkeep PATH    Path to apkeep binary (default: apkeep from $PATH)
 #   --config FILE     FreeKiosk backup JSON to push to the device for import
 #   --adb PATH        Path to adb binary (default: adb from $PATH)
 #   --package PKG     FreeKiosk package name (default: com.freekiosk)
@@ -19,20 +25,22 @@
 # What the script does (in order):
 #   1. Verify adb is reachable and wait for exactly one device
 #   2. Print device model / Android version
-#   3. [--apk] Install the APK/XAPK — handling signature mismatches and existing
+#   3. [--preset-apps] Download and install selected third-party APKPure apps
+#      with apkeep, using the device ABI list for split selection
+#   4. [--apk] Install the APK/XAPK — handling signature mismatches and existing
 #      device-owner status along the way
 #      With --install-only, stop after this step
-#   4. Grant runtime permissions FreeKiosk needs (usage-stats, overlay,
+#   5. Grant runtime permissions FreeKiosk needs (usage-stats, overlay,
 #      WRITE_SECURE_SETTINGS, accessibility service)
-#   5. Check for secondary Android users and signed-in accounts that would block
+#   6. Check for secondary Android users and signed-in accounts that would block
 #      set-device-owner
-#   6. Temporarily disable account-provider packages, set FreeKiosk as Device
+#   7. Temporarily disable account-provider packages, set FreeKiosk as Device
 #      Owner, then restore only packages this script disabled
-#   7. [--config] Push the backup JSON to /sdcard/Download/ and print import
+#   8. [--config] Push the backup JSON to /sdcard/Download/ and print import
 #      instructions
-#   8. Disable removable OEM/system companion packages that widen the Settings
+#   9. Disable removable OEM/system companion packages that widen the Settings
 #      surface on some devices
-#   9. Launch FreeKiosk
+#   10. Launch FreeKiosk
 
 set -uo pipefail
 
@@ -57,6 +65,9 @@ PACKAGE="com.freekiosk"
 ADMIN_COMPONENT="com.freekiosk/.DeviceAdminReceiver"
 APK_PATH=""
 CONFIG_PATH=""
+PRESET_APPS=""
+PRESET_DOWNLOAD_DIR=""
+APKEEP="apkeep"
 AUTO_YES=false
 INSTALL_ONLY=false
 LOG_ROOT="logs/FreeKiosk"
@@ -76,6 +87,9 @@ usage() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --apk)      APK_PATH="$2";        shift 2 ;;
+    --preset-apps) PRESET_APPS="$2";  shift 2 ;;
+    --preset-dir) PRESET_DOWNLOAD_DIR="$2"; shift 2 ;;
+    --apkeep)   APKEEP="$2";          shift 2 ;;
     --config)   CONFIG_PATH="$2";     shift 2 ;;
     --adb)      ADB="$2";             shift 2 ;;
     --package)  PACKAGE="$2";         shift 2 ;;
@@ -90,6 +104,12 @@ done
 if [[ "$INSTALL_ONLY" == "true" && -z "$APK_PATH" ]]; then
   die "--install-only requires --apk FILE."
 fi
+
+if [[ -z "$PRESET_DOWNLOAD_DIR" ]]; then
+  PRESET_DOWNLOAD_DIR="$LOG_ROOT/apkpure-$RUN_ID"
+fi
+
+PRESET_APP_IDS=(artscroll 24six zing spotify toveedo waze)
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -321,6 +341,208 @@ install_artifact() {
   printf '%s\n' "$install_out"
 }
 
+device_apkeep_arch_options() {
+  local abi_list
+  abi_list=$(adb_shell "getprop ro.product.cpu.abilist")
+  if [[ -z "$abi_list" ]]; then
+    warn "Could not read device ABI list; using apkeep defaults." >&2
+    return 0
+  fi
+
+  local -a arches=()
+  local abi
+  for abi in ${abi_list//,/ }; do
+    case "$abi" in
+      arm64-v8a|armeabi-v7a|armeabi|x86|x86_64)
+        arches+=("$abi")
+        ;;
+    esac
+  done
+
+  if [[ "${#arches[@]}" -eq 0 ]]; then
+    warn "Device ABI list has no apkeep-compatible entries: $abi_list" >&2
+    return 0
+  fi
+
+  local IFS=';'
+  printf 'arch=%s\n' "${arches[*]}"
+}
+
+preset_app_exists() {
+  local id="$1"
+  [[ -n "$(preset_app_package "$id")" ]]
+}
+
+preset_app_label() {
+  local id="$1"
+  case "$id" in
+    artscroll) printf 'ArtScroll' ;;
+    24six) printf '24Six' ;;
+    zing) printf 'Zing' ;;
+    spotify) printf 'Spotify' ;;
+    toveedo) printf 'Toveedo' ;;
+    waze) printf 'Waze' ;;
+    *) printf '%s' "$id" ;;
+  esac
+}
+
+preset_app_package() {
+  local id="$1"
+  case "$id" in
+    artscroll) printf 'com.artscroll.digitallibrary' ;;
+    24six) printf 'app.tfs.prod' ;;
+    zing) printf 'fm.jewishmusic.application' ;;
+    spotify) printf 'com.spotify.music' ;;
+    toveedo) printf 'tv.torahtreasure.android' ;;
+    waze) printf 'com.waze' ;;
+  esac
+}
+
+print_preset_menu() {
+  local i id
+  echo ""
+  info "APKPure presets:"
+  for i in "${!PRESET_APP_IDS[@]}"; do
+    id="${PRESET_APP_IDS[$i]}"
+    printf '  %d. %s (%s)\n' "$((i + 1))" "$(preset_app_label "$id")" "$id"
+  done
+  echo "  all. Install every preset"
+  echo ""
+}
+
+parse_preset_apps() {
+  local raw="$1"
+  local -a selected=()
+  local token id i found
+
+  raw="${raw// /}"
+  [[ -n "$raw" ]] || return 0
+
+  if [[ "${raw,,}" == "all" ]]; then
+    printf '%s\n' "${PRESET_APP_IDS[@]}"
+    return 0
+  fi
+
+  IFS=',' read -ra tokens <<<"$raw"
+  for token in "${tokens[@]}"; do
+    [[ -n "$token" ]] || continue
+    token="${token,,}"
+
+    if [[ "$token" =~ ^[0-9]+$ ]]; then
+      i=$((token - 1))
+      if [[ "$i" -ge 0 && "$i" -lt "${#PRESET_APP_IDS[@]}" ]]; then
+        selected+=("${PRESET_APP_IDS[$i]}")
+        continue
+      fi
+      die "Unknown APKPure preset number: $token"
+    fi
+
+    found=false
+    for id in "${PRESET_APP_IDS[@]}"; do
+      if [[ "$token" == "$id" ]]; then
+        selected+=("$id")
+        found=true
+        break
+      fi
+    done
+
+    if [[ "$found" != "true" ]]; then
+      die "Unknown APKPure preset: $token"
+    fi
+  done
+
+  printf '%s\n' "${selected[@]}" | awk '!seen[$0]++'
+}
+
+choose_preset_apps() {
+  local selection="$PRESET_APPS"
+  if [[ -z "$selection" ]]; then
+    if ! ask "Download and install preset apps from APKPure now?"; then
+      return 0
+    fi
+    selection="prompt"
+  fi
+
+  if [[ "${selection,,}" == "prompt" ]]; then
+    print_preset_menu
+    echo -en "${YELLOW}[?]${RESET} Enter preset IDs/numbers, comma-separated, or 'all': "
+    read -r selection
+    selection="${selection:-}"
+  fi
+
+  parse_preset_apps "$selection"
+}
+
+latest_downloaded_artifact() {
+  local app_dir="$1"
+  local marker="$2"
+  find "$app_dir" -maxdepth 1 -type f \( -iname '*.apk' -o -iname '*.xapk' \) -newer "$marker" -print \
+    | sort \
+    | tail -1
+}
+
+install_preset_apps() {
+  local -a selected=()
+  local id
+
+  while IFS= read -r id; do
+    [[ -n "$id" ]] && selected+=("$id")
+  done < <(choose_preset_apps)
+
+  [[ "${#selected[@]}" -gt 0 ]] || return 0
+
+  command -v "$APKEEP" &>/dev/null || die "apkeep not found at '$APKEEP'. Install apkeep or pass --apkeep <path>."
+  mkdir -p "$PRESET_DOWNLOAD_DIR"
+
+  local arch_options
+  arch_options=$(device_apkeep_arch_options)
+  if [[ -n "$arch_options" ]]; then
+    info "apkeep APKPure options: $arch_options"
+  fi
+
+  local pkg label app_dir marker artifact dl_out install_out
+  for id in "${selected[@]}"; do
+    preset_app_exists "$id" || die "Unknown APKPure preset: $id"
+    pkg="$(preset_app_package "$id")"
+    label="$(preset_app_label "$id")"
+    app_dir="$PRESET_DOWNLOAD_DIR/$id"
+    mkdir -p "$app_dir"
+    marker="$app_dir/.download-start-$RUN_ID"
+    : >"$marker"
+
+    header "Downloading $label"
+    info "APKPure package: $pkg"
+    if [[ -n "$arch_options" ]]; then
+      dl_out=$("$APKEEP" -a "$pkg" -d apk-pure -o "$arch_options" "$app_dir" 2>&1)
+    else
+      dl_out=$("$APKEEP" -a "$pkg" -d apk-pure "$app_dir" 2>&1)
+    fi
+    printf '%s\n' "$dl_out" >>"$LOG_FILE"
+
+    artifact=$(latest_downloaded_artifact "$app_dir" "$marker")
+    rm -f "$marker"
+    if [[ -z "$artifact" ]]; then
+      warn "$label download did not produce an APK/XAPK. apkeep output:"
+      echo "$dl_out"
+      continue
+    fi
+
+    ok "Downloaded: $artifact"
+    info "Installing $label..."
+    install_out=$(install_artifact "$artifact") || {
+      warn "$label install command failed: $install_out"
+      continue
+    }
+    printf '%s\n' "$install_out" >>"$LOG_FILE"
+
+    if echo "$install_out" | grep -q "Success"; then
+      ok "$label installed."
+    else
+      warn "$label install failed: $install_out"
+    fi
+  done
+}
+
 secondary_user_ids() {
   adb_shell "pm list users" \
     | sed -n 's/.*UserInfo{\([0-9][0-9]*\):.*/\1/p' \
@@ -433,7 +655,10 @@ if [[ "${sdk:-0}" -lt 21 ]]; then
   die "Android SDK $sdk is below the minimum required (21)."
 fi
 
-# ── step 3: install APK ────────────────────────────────────────────────────────
+# ── step 3: APKPure preset apps ────────────────────────────────────────────────
+install_preset_apps
+
+# ── step 4: install APK ────────────────────────────────────────────────────────
 if [[ -n "$APK_PATH" ]]; then
   header "Installing APK"
 
@@ -563,7 +788,7 @@ else
   fi
 fi
 
-# ── step 4: permissions ────────────────────────────────────────────────────────
+# ── step 5: permissions ────────────────────────────────────────────────────────
 header "Granting Permissions"
 
 grant_permission() {
@@ -677,7 +902,7 @@ else
   fi
 fi
 
-# ── step 5a: multiple users check ──────────────────────────────────────────────
+# ── step 6a: multiple users check ──────────────────────────────────────────────
 header "Android User Check"
 
 users=$(user_count)
@@ -709,7 +934,7 @@ else
   ok "Only primary Android user is present."
 fi
 
-# ── step 5b: account check ─────────────────────────────────────────────────────
+# ── step 6b: account check ─────────────────────────────────────────────────────
 header "Account Check"
 
 acc_count=$(account_count)
@@ -807,7 +1032,7 @@ else
   ok "No extra account-provider packages detected."
 fi
 
-# ── step 6: set device owner ───────────────────────────────────────────────────
+# ── step 7: set device owner ───────────────────────────────────────────────────
 header "Setting Device Owner"
 
 if is_device_owner; then
@@ -840,7 +1065,7 @@ restore_temp_disabled_packages
 info "Re-granting overlay permission post device-owner..."
 "$ADB" shell appops set "$PACKAGE" android:system_alert_window allow &>/dev/null || true
 
-# ── step 7: push config ────────────────────────────────────────────────────────
+# ── step 8: push config ────────────────────────────────────────────────────────
 if [[ -n "$CONFIG_PATH" ]]; then
   header "Pushing Config"
   [[ -f "$CONFIG_PATH" ]] || die "Config file not found: $CONFIG_PATH"
@@ -862,8 +1087,8 @@ if [[ -n "$CONFIG_PATH" ]]; then
   fi
 fi
 
-# ── step 8: prune removable OEM/settings companions ───────────────────────────
-header "Removing Optional OEM Settings Companions"
+# ── step 9: prune removable OEM/settings companions ───────────────────────────
+header "Disabling Optional OEM Settings Companions"
 
 remove_user0_package() {
   local pkg="$1" label="$2"
@@ -882,6 +1107,28 @@ remove_user0_package() {
   fi
 }
 
+disable_user0_package() {
+  local pkg="$1" label="$2"
+  if ! adb_shell "pm list packages $pkg" | grep -q "^package:$pkg$"; then
+    info "$label ($pkg) not present — skipping."
+    return
+  fi
+
+  if pkg_disabled "$pkg"; then
+    info "$label ($pkg) already disabled."
+    return
+  fi
+
+  info "Disabling $label for user 0: $pkg"
+  local out
+  out=$("$ADB" shell pm disable-user --user 0 "$pkg" 2>&1 || true)
+  if echo "$out" | grep -Eq "new state: disabled-user|Success"; then
+    ok "$label disabled for user 0."
+  else
+    warn "$label could not be disabled automatically: $out"
+  fi
+}
+
 # Motorola Help is a known second-hop surface reachable from Settings on some
 # Motorola devices. Settings Intelligence powers the Settings search surface.
 # Removing them for user 0 narrows what a student can reach from Settings while
@@ -889,7 +1136,11 @@ remove_user0_package() {
 remove_user0_package "com.motorola.help" "Moto Help"
 remove_user0_package "com.android.settings.intelligence" "Settings Intelligence"
 
-# ── step 9: launch ─────────────────────────────────────────────────────────────
+# Google Safety Hub can be launched from some emergency dialer flows, creating a
+# kiosk escape path when the lock-screen Emergency button is enabled.
+disable_user0_package "com.google.android.apps.safetyhub" "Google Safety Hub"
+
+# ── step 10: launch ────────────────────────────────────────────────────────────
 header "Launching FreeKiosk"
 
 if pkg_installed "$PACKAGE"; then

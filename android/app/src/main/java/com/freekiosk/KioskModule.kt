@@ -27,6 +27,7 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
     private val emergencyDialerAction = "com.android.phone.EmergencyDialer.DIAL"
     private val gboardPackageName = "com.google.android.inputmethod.latin"
     private val gboardPreventExternalIntentsKey = "prevent_external_intents"
+    private val safetyHubPackage = "com.google.android.apps.safetyhub"
 
     companion object {
         // Store the current instance to allow sending events from MainActivity
@@ -301,6 +302,40 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
     }
 
     @ReactMethod
+    fun isSafetyHubEnabled(promise: Promise) {
+        try {
+            promise.resolve(isPackageEnabledAndVisible(safetyHubPackage))
+        } catch (e: Exception) {
+            android.util.Log.e("KioskModule", "Failed to check Safety Hub status: ${e.message}")
+            promise.reject("ERROR", "Failed to check Safety Hub status: ${e.message}")
+        }
+    }
+
+    @ReactMethod
+    fun disableSafetyHub(promise: Promise) {
+        try {
+            val dpm = reactApplicationContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(reactApplicationContext, DeviceAdminReceiver::class.java)
+
+            if (!dpm.isDeviceOwnerApp(reactApplicationContext.packageName)) {
+                promise.reject("NOT_DEVICE_OWNER", "Disabling Safety Hub requires Device Owner mode")
+                return
+            }
+
+            if (!isPackageInstalled(safetyHubPackage)) {
+                promise.resolve(false)
+                return
+            }
+
+            dpm.setApplicationHidden(adminComponent, safetyHubPackage, true)
+            promise.resolve(!isPackageEnabledAndVisible(safetyHubPackage))
+        } catch (e: Exception) {
+            android.util.Log.e("KioskModule", "Failed to disable Safety Hub: ${e.message}")
+            promise.reject("ERROR", "Failed to disable Safety Hub: ${e.message}")
+        }
+    }
+
+    @ReactMethod
     fun isInLockTaskMode(promise: Promise) {
         try {
             val activityManager = reactApplicationContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -309,6 +344,33 @@ class KioskModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaM
             promise.resolve(isLocked)
         } catch (e: Exception) {
             promise.reject("ERROR", "Failed to check lock task mode: ${e.message}")
+        }
+    }
+
+    private fun isPackageInstalled(packageName: String): Boolean {
+        return try {
+            reactApplicationContext.packageManager.getPackageInfo(packageName, 0)
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    private fun isPackageEnabledAndVisible(packageName: String): Boolean {
+        return try {
+            val pm = reactApplicationContext.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, PackageManager.MATCH_DISABLED_COMPONENTS)
+            val dpm = reactApplicationContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(reactApplicationContext, DeviceAdminReceiver::class.java)
+            val hidden = try {
+                dpm.isDeviceOwnerApp(reactApplicationContext.packageName) &&
+                    dpm.isApplicationHidden(adminComponent, packageName)
+            } catch (_: Exception) {
+                false
+            }
+            appInfo.enabled && !hidden
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
         }
     }
 

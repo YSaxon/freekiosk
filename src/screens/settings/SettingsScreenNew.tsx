@@ -49,7 +49,7 @@ import { ManagedApp } from '../../types/managedApps';
 import { MediaItem, MediaFitMode, generateMediaItemId, detectMediaType } from '../../types/mediaPlayer';
 import FilePickerModule from '../../utils/FilePickerModule';
 
-const { KioskModule } = NativeModules;
+const { KioskModule, RotationControlModule } = NativeModules;
 
 type SettingsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Settings'>;
 
@@ -204,6 +204,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [lockscreenFlashlightEnabled, setLockscreenFlashlightEnabled] = useState<boolean>(false);
   const [lockscreenBrightnessEnabled, setLockscreenBrightnessEnabled] = useState<boolean>(false);
   const [lockscreenRotationLockEnabled, setLockscreenRotationLockEnabled] = useState<boolean>(false);
+  const [lockscreenRotationLockAvailable, setLockscreenRotationLockAvailable] = useState<boolean>(false);
 
   // PDF Viewer state
   const [pdfViewerEnabled, setPdfViewerEnabled] = useState<boolean>(false);
@@ -643,14 +644,21 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     const savedLockscreenFlashlight = await StorageService.getLockscreenFlashlightEnabled();
     const savedLockscreenBrightness = await StorageService.getLockscreenBrightnessEnabled();
     const savedLockscreenRotationLock = await StorageService.getLockscreenRotationLockEnabled();
+    let rotationLockAvailable = false;
+    try {
+      rotationLockAvailable = Boolean(await RotationControlModule?.isAvailable?.());
+    } catch (error) {
+      rotationLockAvailable = false;
+    }
     setLockscreenControlsEnabled(savedLockscreenControls);
+    setLockscreenRotationLockAvailable(rotationLockAvailable);
     setLockscreenWifiEnabled(savedLockscreenWifi);
     setLockscreenBluetoothEnabled(savedLockscreenBt);
     setLockscreenEmergencyCallEnabled(savedLockscreenEmergency);
     setLockscreenAudioEnabled(savedLockscreenAudio);
     setLockscreenFlashlightEnabled(savedLockscreenFlashlight);
     setLockscreenBrightnessEnabled(savedLockscreenBrightness);
-    setLockscreenRotationLockEnabled(savedLockscreenRotationLock);
+    setLockscreenRotationLockEnabled(rotationLockAvailable && savedLockscreenRotationLock);
 
     // PDF Viewer setting
     const savedPdfViewerEnabled = await StorageService.getPdfViewerEnabled();
@@ -932,6 +940,60 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
       setLockscreenAudioEnabled(true);
       setLockscreenFlashlightEnabled(true);
       setLockscreenBrightnessEnabled(true);
+    }
+  };
+
+  const handleLockscreenRotationLockEnabledChange = (enabled: boolean) => {
+    if (enabled && !lockscreenRotationLockAvailable) {
+      Alert.alert('Rotation lock unavailable', 'This device does not expose the system rotation controls needed for the lock screen rotation toggle.');
+      setLockscreenRotationLockEnabled(false);
+      return;
+    }
+
+    setLockscreenRotationLockEnabled(enabled);
+  };
+
+  const handleLockscreenEmergencyCallEnabledChange = async (enabled: boolean) => {
+    if (!enabled) {
+      setLockscreenEmergencyCallEnabled(false);
+      return;
+    }
+
+    try {
+      const safetyHubEnabled = Boolean(await KioskModule?.isSafetyHubEnabled?.());
+      if (!safetyHubEnabled) {
+        setLockscreenEmergencyCallEnabled(true);
+        return;
+      }
+
+      Alert.alert(
+        'Disable Safety Hub?',
+        'Safety Hub is enabled. On some devices it can be opened from the Emergency button and may allow escaping kiosk mode. Disable Safety Hub now?',
+        [
+          {
+            text: 'Keep Enabled',
+            style: 'cancel',
+            onPress: () => setLockscreenEmergencyCallEnabled(true),
+          },
+          {
+            text: 'Disable',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const disabled = Boolean(await KioskModule.disableSafetyHub());
+                if (!disabled) {
+                  Alert.alert('Safety Hub', 'Safety Hub could not be disabled automatically.');
+                }
+              } catch (error) {
+                Alert.alert('Safety Hub', 'Safety Hub could not be disabled automatically. Device Owner mode is required.');
+              }
+              setLockscreenEmergencyCallEnabled(true);
+            },
+          },
+        ],
+      );
+    } catch (error) {
+      setLockscreenEmergencyCallEnabled(true);
     }
   };
 
@@ -1410,7 +1472,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
     await StorageService.saveLockscreenAudioEnabled(lockscreenAudioEnabled);
     await StorageService.saveLockscreenFlashlightEnabled(lockscreenFlashlightEnabled);
     await StorageService.saveLockscreenBrightnessEnabled(lockscreenBrightnessEnabled);
-    await StorageService.saveLockscreenRotationLockEnabled(lockscreenRotationLockEnabled);
+    await StorageService.saveLockscreenRotationLockEnabled(lockscreenRotationLockAvailable && lockscreenRotationLockEnabled);
 
     // Save PDF Viewer setting
     await StorageService.savePdfViewerEnabled(pdfViewerEnabled);
@@ -2006,7 +2068,7 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             lockscreenBluetoothEnabled={lockscreenBluetoothEnabled}
             onLockscreenBluetoothEnabledChange={setLockscreenBluetoothEnabled}
             lockscreenEmergencyCallEnabled={lockscreenEmergencyCallEnabled}
-            onLockscreenEmergencyCallEnabledChange={setLockscreenEmergencyCallEnabled}
+            onLockscreenEmergencyCallEnabledChange={handleLockscreenEmergencyCallEnabledChange}
             lockscreenAudioEnabled={lockscreenAudioEnabled}
             onLockscreenAudioEnabledChange={setLockscreenAudioEnabled}
             lockscreenFlashlightEnabled={lockscreenFlashlightEnabled}
@@ -2014,7 +2076,8 @@ const SettingsScreenNew: React.FC<SettingsScreenProps> = ({ navigation }) => {
             lockscreenBrightnessEnabled={lockscreenBrightnessEnabled}
             onLockscreenBrightnessEnabledChange={setLockscreenBrightnessEnabled}
             lockscreenRotationLockEnabled={lockscreenRotationLockEnabled}
-            onLockscreenRotationLockEnabledChange={setLockscreenRotationLockEnabled}
+            onLockscreenRotationLockEnabledChange={handleLockscreenRotationLockEnabledChange}
+            lockscreenRotationLockAvailable={lockscreenRotationLockAvailable}
           />
         );
       

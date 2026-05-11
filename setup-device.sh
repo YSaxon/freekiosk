@@ -863,7 +863,7 @@ if [[ -n "$CONFIG_PATH" ]]; then
 fi
 
 # ── step 8: prune removable OEM/settings companions ───────────────────────────
-header "Removing Optional OEM Settings Companions"
+header "Disabling Optional OEM Settings Companions"
 
 remove_user0_package() {
   local pkg="$1" label="$2"
@@ -882,12 +882,38 @@ remove_user0_package() {
   fi
 }
 
+disable_user0_package() {
+  local pkg="$1" label="$2"
+  if ! adb_shell "pm list packages $pkg" | grep -q "^package:$pkg$"; then
+    info "$label ($pkg) not present — skipping."
+    return
+  fi
+
+  if pkg_disabled "$pkg"; then
+    info "$label ($pkg) already disabled."
+    return
+  fi
+
+  info "Disabling $label for user 0: $pkg"
+  local out
+  out=$("$ADB" shell pm disable-user --user 0 "$pkg" 2>&1 || true)
+  if echo "$out" | grep -Eq "new state: disabled-user|Success"; then
+    ok "$label disabled for user 0."
+  else
+    warn "$label could not be disabled automatically: $out"
+  fi
+}
+
 # Motorola Help is a known second-hop surface reachable from Settings on some
 # Motorola devices. Settings Intelligence powers the Settings search surface.
 # Removing them for user 0 narrows what a student can reach from Settings while
 # preserving the base Settings app.
 remove_user0_package "com.motorola.help" "Moto Help"
 remove_user0_package "com.android.settings.intelligence" "Settings Intelligence"
+
+# Google Safety Hub can be launched from some emergency dialer flows, creating a
+# kiosk escape path when the lock-screen Emergency button is enabled.
+disable_user0_package "com.google.android.apps.safetyhub" "Google Safety Hub"
 
 # ── step 9: launch ─────────────────────────────────────────────────────────────
 header "Launching FreeKiosk"

@@ -110,6 +110,7 @@ interface SecurityTabProps {
   onLockscreenBrightnessEnabledChange: (value: boolean) => void;
   lockscreenRotationLockEnabled: boolean;
   onLockscreenRotationLockEnabledChange: (value: boolean) => void;
+  lockscreenRotationLockAvailable: boolean;
 }
 
 const SecurityTab: React.FC<SecurityTabProps> = ({
@@ -183,6 +184,7 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onLockscreenBrightnessEnabledChange,
   lockscreenRotationLockEnabled,
   onLockscreenRotationLockEnabledChange,
+  lockscreenRotationLockAvailable,
 }) => {
   const [previewWidth, setPreviewWidth] = useState(0);
   const [previewHeight, setPreviewHeight] = useState(0);
@@ -785,9 +787,14 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
             <View style={styles.divider} />
             <SettingsSwitch
               label="🔄 Rotation lock on lock screen"
-              hint="Show a rotation lock toggle on the PIN entry screen."
-              value={lockscreenRotationLockEnabled}
+              hint={
+                lockscreenRotationLockAvailable
+                  ? 'Show a rotation lock toggle on the PIN entry screen.'
+                  : 'Unavailable on this device because Android is not allowing this app to change system rotation settings.'
+              }
+              value={lockscreenRotationLockAvailable && lockscreenRotationLockEnabled}
               onValueChange={onLockscreenRotationLockEnabledChange}
+              disabled={!lockscreenRotationLockAvailable}
             />
           </>
         )}

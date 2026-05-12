@@ -15,6 +15,8 @@
 #   --preset-dir DIR
 #                   Directory for apkeep downloads (default: logs/FreeKiosk/apkpure-<run>)
 #   --apkeep PATH    Path to apkeep binary (default: apkeep from $PATH)
+#                   If missing, a matching prebuilt binary is downloaded from
+#                   https://github.com/EFForg/apkeep/releases
 #   --config FILE     FreeKiosk backup JSON to push to the device for import
 #   --adb PATH        Path to adb binary (default: adb from $PATH)
 #   --package PKG     FreeKiosk package name (default: com.freekiosk)
@@ -71,6 +73,7 @@ APKEEP="apkeep"
 AUTO_YES=false
 INSTALL_ONLY=false
 LOG_ROOT="logs/FreeKiosk"
+APKEEP_TOOLS_DIR="$LOG_ROOT/tools"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="$LOG_ROOT/setup-$RUN_ID.log"
 TEMP_DISABLED_PACKAGES=()
@@ -368,6 +371,87 @@ device_apkeep_arch_options() {
   printf 'arch=%s\n' "${arches[*]}"
 }
 
+host_apkeep_asset_name() {
+  local os arch target ext
+  os=$(uname -s 2>/dev/null || printf 'unknown')
+  arch=$(uname -m 2>/dev/null || printf 'unknown')
+  ext=""
+
+  case "$os" in
+    Darwin) os="apple-darwin" ;;
+    Linux) os="unknown-linux-gnu" ;;
+    MINGW*|MSYS*|CYGWIN*) os="pc-windows-msvc"; ext=".exe" ;;
+    *) die "Unsupported host OS for automatic apkeep download: $os" ;;
+  esac
+
+  case "$arch" in
+    x86_64|amd64) target="x86_64-$os" ;;
+    arm64|aarch64)
+      if [[ "$os" == "apple-darwin" ]]; then
+        target="aarch64-$os"
+      elif [[ "$os" == "unknown-linux-gnu" ]]; then
+        target="aarch64-$os"
+      else
+        die "No known apkeep Windows ARM64 release asset."
+      fi
+      ;;
+    i386|i686)
+      if [[ "$os" == "pc-windows-msvc" ]]; then
+        target="i686-$os"
+      else
+        target="i686-$os"
+      fi
+      ;;
+    armv7*|armv7l)
+      [[ "$os" == "unknown-linux-gnu" ]] || die "No known apkeep ARMv7 release asset for $os."
+      target="armv7-unknown-linux-gnueabihf"
+      ;;
+    *) die "Unsupported host CPU for automatic apkeep download: $arch" ;;
+  esac
+
+  printf 'apkeep-%s%s' "$target" "$ext"
+}
+
+download_file() {
+  local url="$1" dest="$2"
+  if command -v curl &>/dev/null; then
+    curl -fL "$url" -o "$dest"
+  elif command -v wget &>/dev/null; then
+    wget -O "$dest" "$url"
+  elif command -v powershell.exe &>/dev/null; then
+    powershell.exe -NoProfile -ExecutionPolicy Bypass \
+      -Command "Invoke-WebRequest -UseBasicParsing -Uri '$url' -OutFile '$dest'"
+  else
+    return 1
+  fi
+}
+
+ensure_apkeep() {
+  if command -v "$APKEEP" &>/dev/null; then
+    APKEEP="$(command -v "$APKEEP")"
+    return 0
+  fi
+
+  local asset url dest
+  asset="$(host_apkeep_asset_name)"
+  mkdir -p "$APKEEP_TOOLS_DIR"
+  dest="$APKEEP_TOOLS_DIR/$asset"
+
+  if [[ ! -x "$dest" ]]; then
+    url="https://github.com/EFForg/apkeep/releases/latest/download/$asset"
+    info "apkeep not found; downloading $asset from GitHub releases."
+    if ! download_file "$url" "$dest"; then
+      rm -f "$dest"
+      die "Could not download apkeep from $url. Install apkeep manually or pass --apkeep <path>."
+    fi
+    chmod +x "$dest" 2>/dev/null || true
+  else
+    info "Using cached apkeep binary: $dest"
+  fi
+
+  APKEEP="$dest"
+}
+
 preset_app_exists() {
   local id="$1"
   [[ -n "$(preset_app_package "$id")" ]]
@@ -491,7 +575,7 @@ install_preset_apps() {
 
   [[ "${#selected[@]}" -gt 0 ]] || return 0
 
-  command -v "$APKEEP" &>/dev/null || die "apkeep not found at '$APKEEP'. Install apkeep or pass --apkeep <path>."
+  ensure_apkeep
   mkdir -p "$PRESET_DOWNLOAD_DIR"
 
   local arch_options

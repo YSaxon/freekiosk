@@ -238,6 +238,27 @@ apk_artifact_package_name() {
   echo "$package_name"
 }
 
+find_default_apk() {
+  local candidate package_name
+  candidate="android/app/build/outputs/apk/release/app-release.apk"
+  if [[ -f "$candidate" ]]; then
+    package_name=$(apk_artifact_package_name "$candidate")
+    if [[ -z "$package_name" || "$package_name" == "$PACKAGE" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  fi
+
+  while IFS= read -r candidate; do
+    [[ -f "$candidate" ]] || continue
+    package_name=$(apk_artifact_package_name "$candidate")
+    if [[ "$package_name" == "$PACKAGE" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done < <(find . -maxdepth 1 -type f -iname '*.apk' | sort)
+}
+
 select_xapk_splits() {
   local xapk_path="$1" extract_dir="$2"
   local abi_list density_bucket
@@ -743,6 +764,13 @@ fi
 install_preset_apps
 
 # ── step 4: install APK ────────────────────────────────────────────────────────
+if [[ -z "$APK_PATH" ]]; then
+  APK_PATH=$(find_default_apk)
+  if [[ -n "$APK_PATH" ]]; then
+    info "No --apk provided; using detected APK: $APK_PATH"
+  fi
+fi
+
 if [[ -n "$APK_PATH" ]]; then
   header "Installing APK"
 
@@ -868,6 +896,7 @@ else
     ok "FreeKiosk is already installed (no --apk provided, skipping install step)."
   else
     warn "FreeKiosk does not appear to be installed and no --apk was provided."
+    warn "Looked for android/app/build/outputs/apk/release/app-release.apk and ./*.apk matching $PACKAGE."
     warn "The remaining steps may fail. Pass --apk to install it."
   fi
 fi
